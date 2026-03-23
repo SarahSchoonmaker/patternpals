@@ -19,7 +19,6 @@
       "bundleIdentifier": "com.kindredpal.palfeelings",
       "buildNumber": "1",
       "infoPlist": {
-        "NSUserTrackingUsageDescription": "We don't track you. Pal Feelings never shows ads.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -30,7 +29,9 @@
       },
       "package": "com.kindredpal.palfeelings",
       "versionCode": 1,
-      "permissions": []
+      "permissions": [
+        "android.permission.VIBRATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
