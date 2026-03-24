@@ -199,6 +199,8 @@ export default function GameScreen({ navigation, route }) {
   const currentPal = save
     ? PALS.find((p) => p.id === save.selPal) || PALS[0]
     : PALS[0];
+  const isPremium = save?.isPremium === true;
+  const FREE_LEVEL_CAP = 10;
 
   // ── World transition ────────────────────────────────────
   function transitionToWorld(newLevel) {
@@ -494,7 +496,7 @@ export default function GameScreen({ navigation, route }) {
     }
   }
 
-  function handleCorrect(emoId, idx, seq) {
+  async function handleCorrect(emoId, idx, seq) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     // Track last two emotions for combo detection
@@ -537,7 +539,25 @@ export default function GameScreen({ navigation, route }) {
       const isLevelUp = completedRounds % 3 === 0;
 
       if (isLevelUp) {
-        levelRef.current += 1;
+        const nextLevel = levelRef.current + 1;
+
+        // ── FREE LEVEL CAP CHECK ────────────────────────────
+        // Free users hit a wall at level 10 — show paywall
+        if (!isPremium && nextLevel > FREE_LEVEL_CAP) {
+          gameActiveRef.current = false;
+          setGamePhase("levelcap");
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          const finalSave = await recordGameEnd(
+            scoreRef.current,
+            levelRef.current,
+            streakRef.current,
+            sessionEmosRef.current,
+          );
+          setSave(finalSave);
+          return;
+        }
+
+        levelRef.current = nextLevel;
         setLevel(levelRef.current);
         transitionToWorld(levelRef.current);
         setStageMsg(`${getWorld(levelRef.current).emoji} Level Up! New World!`);
@@ -559,8 +579,6 @@ export default function GameScreen({ navigation, route }) {
       // Regular round: 1200ms pause, Level up: 2500ms pause
       const pauseDur = isLevelUp ? 2500 : 1200;
 
-      // Keep showing pal stage but disable input during pause
-      // (gamePhase stays 'showing' so buttons are already disabled)
       setTimeout(() => {
         if (!gameActiveRef.current) return;
         const nextSeq = [
@@ -719,6 +737,96 @@ export default function GameScreen({ navigation, route }) {
             : streak > 0
               ? streak + "×"
               : "—";
+
+  // ── LEVEL CAP SCREEN (free users at level 10) ───────────────
+  if (gamePhase === "levelcap") {
+    return (
+      <View style={s.root}>
+        <LinearGradient
+          colors={["#1a2a50", "#2a3a70", "#0f1f43"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <SafeAreaView
+          style={[s.overSafe, { paddingTop: insets.top }]}
+          edges={["left", "right", "bottom"]}
+        >
+          <View style={s.overCard}>
+            {/* Celebration */}
+            <Text style={{ fontSize: 72, marginBottom: 8 }}>🏆</Text>
+            <Text style={[s.overTitle, { color: "#FFD93D" }]}>
+              Level 10 Champion!
+            </Text>
+            <Text style={s.overSub}>
+              You've mastered the free levels! You're an emotional memory
+              superstar! 🌟
+            </Text>
+
+            {/* Stats */}
+            <View style={s.overStats}>
+              {[
+                { v: scoreRef.current, l: "Score" },
+                { v: levelRef.current, l: "Level" },
+                { v: save?.best || 0, l: "Best" },
+              ].map((st) => (
+                <View key={st.l} style={s.ostat}>
+                  <Text style={s.ostatV}>{st.v}</Text>
+                  <Text style={s.ostatL}>{st.l}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Paywall pitch */}
+            <View style={s.capBox}>
+              <Text style={s.capBoxTitle}>👑 Keep Going with Premium</Text>
+              <Text style={s.capBoxSub}>
+                Unlock all 9 Pals, unlimited levels, Speed/Mirror/Story modes
+                and the full Parent Dashboard — all for a one-time $7.99.
+              </Text>
+              <View style={s.capFeatures}>
+                {[
+                  "🐾 All 9 Pals",
+                  "♾️ Unlimited levels",
+                  "⚡ Speed mode",
+                  "🪞 Mirror mode",
+                  "📊 Parent Dashboard",
+                ].map((f, i) => (
+                  <View key={i} style={s.capFeatureRow}>
+                    <Text style={s.capFeatureTxt}>{f}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={s.capCta}
+              onPress={() => {
+                navigation.navigate("Paywall", {});
+              }}
+              activeOpacity={0.88}
+            >
+              <LinearGradient
+                colors={["#FFD93D", "#FF9A3C"]}
+                style={s.capCtaGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={s.capCtaTxt}>Unlock Premium — $7.99</Text>
+                <Text style={s.capCtaSub}>One-time · No subscription</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <Button
+              label="Play Again (Free)"
+              onPress={restartGame}
+              variant="soft"
+              style={{ marginBottom: 8 }}
+            />
+            <Button label="Back Home" onPress={quitGame} variant="soft" />
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   // ── GAME OVER ─────────────────────────────────────────────
   if (gamePhase === "gameover") {
@@ -1305,6 +1413,52 @@ const s = StyleSheet.create({
     fontSize: 24,
     color: "white",
     fontWeight: "900",
+  },
+
+  capBox: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    width: "100%",
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: "rgba(255,217,61,0.3)",
+  },
+  capBoxTitle: {
+    fontFamily: fonts.displayBold,
+    fontSize: 17,
+    color: "#FFD93D",
+    marginBottom: 6,
+  },
+  capBoxSub: {
+    fontFamily: fonts.bodyReg,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.6)",
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
+  capFeatures: { gap: 6 },
+  capFeatureRow: { flexDirection: "row", alignItems: "center" },
+  capFeatureTxt: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "700",
+  },
+  capCta: {
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    width: "100%",
+    marginBottom: 10,
+    ...shadows.lg,
+  },
+  capCtaGradient: { padding: 18, alignItems: "center" },
+  capCtaTxt: { fontFamily: fonts.displayBold, fontSize: 18, color: "white" },
+  capCtaSub: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.8)",
+    marginTop: 3,
   },
 
   // Game over
