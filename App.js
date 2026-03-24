@@ -15,13 +15,13 @@ import ParentScreen from "./src/screens/ParentScreen";
 import JournalScreen from "./src/screens/JournalScreen";
 import LeaderboardScreen from "./src/screens/LeaderboardScreen";
 import FeelingOfDayScreen from "./src/screens/FeelingOfDayScreen";
+import PaywallScreen from "./src/screens/PaywallScreen";
 import BottomNav from "./src/components/BottomNav";
 
 SplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
 
-// Helper — reads active route name from nav state
 function getActiveRouteName(state) {
   if (!state) return "Home";
   const route = state.routes[state.index];
@@ -111,9 +111,13 @@ export default function App() {
                   name="FeelingOfDay"
                   component={FeelingOfDayScreen}
                 />
+                <Stack.Screen
+                  name="Paywall"
+                  component={PaywallScreen}
+                  options={{ animation: "slide_from_bottom" }}
+                />
               </Stack.Navigator>
 
-              {/* BottomNav sits outside the stack but inside NavigationContainer */}
               <BottomNav
                 navigation={navigationRef}
                 currentRoute={currentRoute}
