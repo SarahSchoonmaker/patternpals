@@ -154,6 +154,7 @@ export default function GameScreen({ navigation, route }) {
   // World + combo state
   const [currentWorld, setCurrentWorld] = useState(WORLDS[0]);
   const [activeCombo, setActiveCombo] = useState(null);
+  const [lives, setLives] = useState(3);
   const [shieldActive, setShieldActive] = useState(false);
   const [scoreMultiplier, setScoreMultiplier] = useState(1);
   const [comboPopLabel, setComboPopLabel] = useState(null);
@@ -178,6 +179,7 @@ export default function GameScreen({ navigation, route }) {
   const streakRef = useRef(0);
   const sessionEmosRef = useRef({});
   const gameActiveRef = useRef(false);
+  const livesRef = useRef(3); // 3 lives per game
   const shieldRef = useRef(false);
   const multiplierRef = useRef(1);
   const lastTwoEmosRef = useRef([]);
@@ -390,6 +392,7 @@ export default function GameScreen({ navigation, route }) {
     shieldRef.current = false;
     multiplierRef.current = 1;
     lastTwoEmosRef.current = [];
+    livesRef.current = 3;
     setSequence([]);
     setPlayerIdx(0);
     setScore(0);
@@ -397,6 +400,7 @@ export default function GameScreen({ navigation, route }) {
     setStreak(0);
     setShieldActive(false);
     setScoreMultiplier(1);
+    setLives(3);
     setCurrentWorld(getWorld(1));
     setGamePhase("showing");
     addToSequence([], 1);
@@ -608,17 +612,77 @@ export default function GameScreen({ navigation, route }) {
 
   async function handleWrong() {
     if (!gameActiveRef.current) return;
-    gameActiveRef.current = false;
-    setGamePhase("gameover");
-    setStageMsg("Oops! Keep trying! 💪");
 
-    const finalSave = await recordGameEnd(
-      scoreRef.current,
-      levelRef.current,
-      streakRef.current,
-      sessionEmosRef.current,
-    );
-    setSave(finalSave);
+    livesRef.current -= 1;
+    setLives(livesRef.current);
+
+    if (livesRef.current > 0) {
+      // Still have a life — replay the sequence so player can try again
+      streakRef.current = 0;
+      setStreak(0);
+      multiplierRef.current = 1;
+      setScoreMultiplier(1);
+      lastTwoEmosRef.current = [];
+
+      // Show heart lost popup
+      showComboPopup(
+        lives <= 1 ? "💔 Last Heart!" : `💔 ${livesRef.current} Hearts Left`,
+        "#FF6B6B",
+      );
+      setStageMsg("Oops! Watch again carefully... 👀");
+      setGamePhase("showing");
+
+      // Brief pause so player sees the mistake, then replay
+      await sleep(1200);
+      if (!gameActiveRef.current) return;
+
+      // Replay the SAME sequence — don't add a new emotion
+      const currentSeq = seqRef.current;
+      playerIdxRef.current = 0;
+      setPlayerIdx(0);
+      setStageMsg("Watch carefully! 👀");
+
+      const delay = Math.max(400, 800 - levelRef.current * 35);
+      const litDur = Math.max(250, 500 - levelRef.current * 25);
+
+      for (let i = 0; i < currentSeq.length; i++) {
+        await sleep(delay);
+        if (!gameActiveRef.current) return;
+        const displayIdx =
+          mode === "mirror"
+            ? currentSeq[currentSeq.length - 1 - i]
+            : currentSeq[i];
+        const emo = EMOTIONS[displayIdx];
+        setLitBtn(emo.id);
+        setCurrentEmo(emo);
+        animatePal(emo.id);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        await sleep(litDur);
+        setLitBtn(null);
+      }
+
+      await sleep(350);
+      if (!gameActiveRef.current) return;
+      setCurrentEmo(null);
+      setGamePhase("player");
+      if (mode === "speed") {
+        setStageMsg("Quick! Show the feelings! ⚡");
+        startSpeedTimer();
+      } else setStageMsg("Try again! You can do it! 💪");
+    } else {
+      // No lives left — game over
+      gameActiveRef.current = false;
+      setGamePhase("gameover");
+      setStageMsg("Nice effort! Keep practicing! 💪");
+
+      const finalSave = await recordGameEnd(
+        scoreRef.current,
+        levelRef.current,
+        streakRef.current,
+        sessionEmosRef.current,
+      );
+      setSave(finalSave);
+    }
   }
 
   function quitGame() {
@@ -781,6 +845,16 @@ export default function GameScreen({ navigation, route }) {
               <Pill value={score} label="Score" />
               <Pill value={level} label="Level" />
               <Pill value={streakLabel} label="Streak" />
+            </View>
+            <View style={s.livesWrap}>
+              {[...Array(2)].map((_, i) => (
+                <Text
+                  key={i}
+                  style={[s.lifeIcon, i >= lives && s.lifeIconLost]}
+                >
+                  ❤️
+                </Text>
+              ))}
             </View>
           </View>
 
@@ -1044,6 +1118,9 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: spacing.sm,
   },
+  livesWrap: { flexDirection: "row", gap: 2 },
+  lifeIcon: { fontSize: 18 },
+  lifeIconLost: { opacity: 0.2 },
   hudPills: { flexDirection: "row", gap: 8 },
 
   worldBanner: {
@@ -1209,6 +1286,10 @@ const s = StyleSheet.create({
     letterSpacing: 0.8,
   },
   startBtn: { marginTop: 8 },
+
+  livesRow: { flexDirection: "row", gap: 3, alignItems: "center" },
+  heart: { fontSize: 18 },
+  heartEmpty: { opacity: 0.35 },
 
   comboPop: {
     position: "absolute",
