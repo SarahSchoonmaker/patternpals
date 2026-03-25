@@ -180,7 +180,7 @@ export default function HomeScreen({ navigation }) {
         {/* Daily challenge */}
         <TouchableOpacity
           style={styles.dailyCard}
-          onPress={() => navigation.navigate("Game", { mode: "daily" })}
+          onPress={() => navigation.navigate("Game", { mode: "classic" })}
           activeOpacity={0.85}
         >
           <LinearGradient
@@ -238,12 +238,23 @@ export default function HomeScreen({ navigation }) {
               key={m.mode}
               activeOpacity={0.85}
               style={styles.modeCard}
-              onPress={() => navigation.navigate("Game", { mode: m.mode })}
+              onPress={() => {
+                if (m.mode !== "classic" && !save.isPremium) {
+                  navigation.navigate("Paywall", {});
+                } else {
+                  navigation.navigate("Game", { mode: m.mode });
+                }
+              }}
             >
               <LinearGradient colors={m.color} style={styles.modeGradient}>
                 <Text style={styles.modeIcon}>{m.icon}</Text>
                 <Text style={styles.modeTitle}>{m.title}</Text>
                 <Text style={styles.modeSub}>{m.sub}</Text>
+                {m.mode !== "classic" && !save.isPremium && (
+                  <View style={styles.modeLockBadge}>
+                    <Text style={styles.modeLockTxt}>👑 Premium</Text>
+                  </View>
+                )}
               </LinearGradient>
             </TouchableOpacity>
           ))}
@@ -454,5 +465,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.mid,
     marginTop: 3,
+  },
+  modeLockBadge: {
+    backgroundColor: "rgba(255,217,61,0.15)",
+    borderRadius: 50,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    marginTop: 5,
+  },
+  modeLockTxt: {
+    fontFamily: fonts.body,
+    fontSize: 9,
+    color: colors.gold,
+    fontWeight: "800",
   },
 });

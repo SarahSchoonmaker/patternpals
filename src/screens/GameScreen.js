@@ -134,7 +134,10 @@ function checkCombo(lastTwo) {
 }
 
 export default function GameScreen({ navigation, route }) {
-  const { mode = "classic" } = route.params || {};
+  const rawMode = route.params?.mode || "classic";
+  const mode = ["classic", "speed", "mirror", "story"].includes(rawMode)
+    ? rawMode
+    : "classic";
   const insets = useSafeAreaInsets();
 
   // Core game state
@@ -199,6 +202,9 @@ export default function GameScreen({ navigation, route }) {
     : PALS[0];
   const isPremium = save?.isPremium === true;
   const FREE_LEVEL_CAP = 10;
+
+  // Don't render anything until save is loaded
+  if (!save) return null;
 
   // ── World transition ────────────────────────────────────
   function transitionToWorld(newLevel) {
