@@ -154,7 +154,6 @@ export default function GameScreen({ navigation, route }) {
   // World + combo state
   const [currentWorld, setCurrentWorld] = useState(WORLDS[0]);
   const [activeCombo, setActiveCombo] = useState(null);
-  const [lives, setLives] = useState(3);
   const [shieldActive, setShieldActive] = useState(false);
   const [scoreMultiplier, setScoreMultiplier] = useState(1);
   const [comboPopLabel, setComboPopLabel] = useState(null);
@@ -179,7 +178,6 @@ export default function GameScreen({ navigation, route }) {
   const streakRef = useRef(0);
   const sessionEmosRef = useRef({});
   const gameActiveRef = useRef(false);
-  const livesRef = useRef(3); // 3 lives per game
   const shieldRef = useRef(false);
   const multiplierRef = useRef(1);
   const lastTwoEmosRef = useRef([]);
@@ -394,7 +392,6 @@ export default function GameScreen({ navigation, route }) {
     shieldRef.current = false;
     multiplierRef.current = 1;
     lastTwoEmosRef.current = [];
-    livesRef.current = 3;
     setSequence([]);
     setPlayerIdx(0);
     setScore(0);
@@ -402,7 +399,6 @@ export default function GameScreen({ navigation, route }) {
     setStreak(0);
     setShieldActive(false);
     setScoreMultiplier(1);
-    setLives(3);
     setCurrentWorld(getWorld(1));
     setGamePhase("showing");
     addToSequence([], 1);
@@ -631,68 +627,75 @@ export default function GameScreen({ navigation, route }) {
   async function handleWrong() {
     if (!gameActiveRef.current) return;
 
-    livesRef.current -= 1;
-    setLives(livesRef.current);
+    // No game over — always replay the sequence and try again
+    // Streak resets but score is kept — practice philosophy
+    streakRef.current = 0;
+    setStreak(0);
+    multiplierRef.current = 1;
+    setScoreMultiplier(1);
+    lastTwoEmosRef.current = [];
 
-    if (livesRef.current > 0) {
-      // Still have a life — replay the sequence so player can try again
-      streakRef.current = 0;
-      setStreak(0);
-      multiplierRef.current = 1;
-      setScoreMultiplier(1);
-      lastTwoEmosRef.current = [];
+    // Fun encouraging popup
+    const oopsMsgs = [
+      { label: "Almost! Try again! 💪", color: "#FF9A3C" },
+      { label: "So close! Watch again 👀", color: "#4D96FF" },
+      { label: "Keep going! You got this!", color: "#6BCB77" },
+      { label: "Watch carefully! 🧠", color: "#C77DFF" },
+    ];
+    const msg = oopsMsgs[Math.floor(Math.random() * oopsMsgs.length)];
+    showComboPopup(msg.label, msg.color);
 
-      // Show heart lost popup
-      showComboPopup(
-        lives <= 1 ? "💔 Last Heart!" : `💔 ${livesRef.current} Hearts Left`,
-        "#FF6B6B",
-      );
-      setStageMsg("Oops! Watch again carefully... 👀");
-      setGamePhase("showing");
+    setStageMsg("Watch carefully this time! 👀");
+    setGamePhase("showing");
 
-      // Brief pause so player sees the mistake, then replay
-      await sleep(1200);
+    // Pause so player registers the mistake
+    await sleep(1400);
+    if (!gameActiveRef.current) return;
+
+    // Replay the EXACT same sequence — no new emotion added
+    const currentSeq = seqRef.current;
+    playerIdxRef.current = 0;
+    setPlayerIdx(0);
+    setStageMsg("Watch carefully! 👀");
+
+    const delay = Math.max(400, 800 - levelRef.current * 35);
+    const litDur = Math.max(250, 500 - levelRef.current * 25);
+
+    for (let i = 0; i < currentSeq.length; i++) {
+      await sleep(delay);
       if (!gameActiveRef.current) return;
+      const displayIdx =
+        mode === "mirror"
+          ? currentSeq[currentSeq.length - 1 - i]
+          : currentSeq[i];
+      const emo = EMOTIONS[displayIdx];
+      setLitBtn(emo.id);
+      setCurrentEmo(emo);
+      animatePal(emo.id);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await sleep(litDur);
+      setLitBtn(null);
+    }
 
-      // Replay the SAME sequence — don't add a new emotion
-      const currentSeq = seqRef.current;
-      playerIdxRef.current = 0;
-      setPlayerIdx(0);
-      setStageMsg("Watch carefully! 👀");
+    await sleep(350);
+    if (!gameActiveRef.current) return;
+    setCurrentEmo(null);
+    setGamePhase("player");
+    if (mode === "speed") {
+      setStageMsg("Quick! Show the feelings! ⚡");
+      startSpeedTimer();
+    } else setStageMsg("Try again! You can do it! 💪");
+  }
 
-      const delay = Math.max(400, 800 - levelRef.current * 35);
-      const litDur = Math.max(250, 500 - levelRef.current * 25);
-
-      for (let i = 0; i < currentSeq.length; i++) {
-        await sleep(delay);
-        if (!gameActiveRef.current) return;
-        const displayIdx =
-          mode === "mirror"
-            ? currentSeq[currentSeq.length - 1 - i]
-            : currentSeq[i];
-        const emo = EMOTIONS[displayIdx];
-        setLitBtn(emo.id);
-        setCurrentEmo(emo);
-        animatePal(emo.id);
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        await sleep(litDur);
-        setLitBtn(null);
-      }
-
-      await sleep(350);
-      if (!gameActiveRef.current) return;
-      setCurrentEmo(null);
-      setGamePhase("player");
-      if (mode === "speed") {
-        setStageMsg("Quick! Show the feelings! ⚡");
-        startSpeedTimer();
-      } else setStageMsg("Try again! You can do it! 💪");
-    } else {
-      // No lives left — game over
-      gameActiveRef.current = false;
-      setGamePhase("gameover");
-      setStageMsg("Nice effort! Keep practicing! 💪");
-
+  async function quitGame() {
+    if (gamePhase === "idle") {
+      navigation.goBack();
+      return;
+    }
+    gameActiveRef.current = false;
+    clearSpeedTimer();
+    // Show session summary before going home
+    if (scoreRef.current > 0) {
       const finalSave = await recordGameEnd(
         scoreRef.current,
         levelRef.current,
@@ -700,13 +703,10 @@ export default function GameScreen({ navigation, route }) {
         sessionEmosRef.current,
       );
       setSave(finalSave);
+      setGamePhase("gameover");
+    } else {
+      navigation.goBack();
     }
-  }
-
-  function quitGame() {
-    gameActiveRef.current = false;
-    clearSpeedTimer();
-    navigation.goBack();
   }
 
   function restartGame() {
@@ -830,19 +830,30 @@ export default function GameScreen({ navigation, route }) {
 
   // ── GAME OVER ─────────────────────────────────────────────
   if (gamePhase === "gameover") {
-    const medal = score >= 150 ? "🏆" : score >= 60 ? "🥳" : currentPal.emoji;
+    const medal =
+      score >= 200
+        ? "🏆"
+        : score >= 100
+          ? "🌟"
+          : score >= 50
+            ? "🥳"
+            : currentPal.emoji;
     const title =
-      score >= 150
+      score >= 200
         ? "Feelings Master! 🧠"
-        : score >= 60
-          ? "Great Feelings! 🌟"
-          : "Nice Try! 💪";
+        : score >= 100
+          ? "Amazing Session! 🌟"
+          : score >= 50
+            ? "Great Practice! 🎯"
+            : "Nice Session! 💪";
     const sub =
-      score >= 150
-        ? "You understand emotions really well!"
-        : score >= 60
-          ? "Your emotional memory is growing!"
-          : "Every game teaches you more about feelings!";
+      score >= 200
+        ? `You have incredible emotional memory!`
+        : score >= 100
+          ? `Your emotional memory is really growing!`
+          : score >= 50
+            ? `Keep practicing — you're getting better!`
+            : `Every session teaches you more about feelings!`;
 
     return (
       <View style={s.root}>
@@ -901,7 +912,11 @@ export default function GameScreen({ navigation, route }) {
               variant="green"
               style={{ marginBottom: 10 }}
             />
-            <Button label="Back Home" onPress={quitGame} variant="soft" />
+            <Button
+              label="Back Home"
+              onPress={() => navigation.goBack()}
+              variant="soft"
+            />
           </View>
         </SafeAreaView>
       </View>
@@ -1394,10 +1409,6 @@ const s = StyleSheet.create({
     letterSpacing: 0.8,
   },
   startBtn: { marginTop: 8 },
-
-  livesRow: { flexDirection: "row", gap: 3, alignItems: "center" },
-  heart: { fontSize: 18 },
-  heartEmpty: { opacity: 0.35 },
 
   comboPop: {
     position: "absolute",
