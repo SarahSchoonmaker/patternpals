@@ -133,6 +133,15 @@ function checkCombo(lastTwo) {
   );
 }
 
+// Pre-generated stars — never call Math.random() inside render
+const STARS = Array.from({ length: 30 }, (_, i) => ({
+  top: `${(i * 37.3 + 7) % 100}%`,
+  left: `${(i * 61.8 + 13) % 100}%`,
+  width: (i % 3) + 1,
+  height: (i % 3) + 1,
+  opacity: 0.3 + (i % 5) * 0.1,
+}));
+
 export default function GameScreen({ navigation, route }) {
   const rawMode = route.params?.mode || "classic";
   const mode = ["classic", "speed", "mirror", "story"].includes(rawMode)
@@ -985,17 +994,17 @@ export default function GameScreen({ navigation, route }) {
       {/* World stars for dark worlds */}
       {!isLightWorld && (
         <View style={s.starsWrap} pointerEvents="none">
-          {[...Array(30)].map((_, i) => (
+          {STARS.map((star, i) => (
             <View
               key={i}
               style={[
                 s.star,
                 {
-                  top: `${Math.random() * 100}%`,
-                  left: `${Math.random() * 100}%`,
-                  width: Math.random() * 3 + 1,
-                  height: Math.random() * 3 + 1,
-                  opacity: 0.3 + Math.random() * 0.5,
+                  top: star.top,
+                  left: star.left,
+                  width: star.width,
+                  height: star.height,
+                  opacity: star.opacity,
                 },
               ]}
             />
