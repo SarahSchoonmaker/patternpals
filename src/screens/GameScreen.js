@@ -463,7 +463,7 @@ export default function GameScreen({ navigation, route }) {
     if (!expected) return;
 
     if (emoId === expected) {
-      handleCorrect(emoId, idx, seq);
+      handleCorrect(emoId, idx);
     } else {
       if (shieldRef.current) {
         shieldRef.current = false;
@@ -480,7 +480,8 @@ export default function GameScreen({ navigation, route }) {
     }
   }
 
-  async function handleCorrect(emoId, idx, seq) {
+  async function handleCorrect(emoId, idx) {
+    const seq = seqRef.current; // always read from ref, never from stale closure
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
     const newLastTwo = [...lastTwoEmosRef.current, emoId].slice(-2);
@@ -548,12 +549,13 @@ export default function GameScreen({ navigation, route }) {
 
       multiplierRef.current = 1;
       setScoreMultiplier(1);
-      setGamePhase("showing"); // prevent frozen state during pause
-      const pauseDur = isLevelUp ? 2500 : 1200;
-      setTimeout(() => {
-        if (!gameActiveRef.current) return;
-        addToSequence(seqRef.current, levelRef.current);
-      }, pauseDur);
+
+      // Use async/await sleep instead of setTimeout to avoid closure issues
+      const pauseDur = isLevelUp ? 2000 : 1000;
+      setGamePhase("showing");
+      await sleep(pauseDur);
+      if (!gameActiveRef.current) return;
+      await addToSequence(seqRef.current, levelRef.current);
     }
   }
 
