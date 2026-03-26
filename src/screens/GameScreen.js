@@ -203,9 +203,6 @@ export default function GameScreen({ navigation, route }) {
   const isPremium = save?.isPremium === true;
   const FREE_LEVEL_CAP = 10;
 
-  // Don't render anything until save is loaded
-  if (!save) return null;
-
   // ── World transition ────────────────────────────────────
   function transitionToWorld(newLevel) {
     const newWorld = getWorld(newLevel);
@@ -728,8 +725,6 @@ export default function GameScreen({ navigation, route }) {
     speedPct > 0.5 ? colors.green : speedPct > 0.25 ? colors.gold : colors.red;
   const world = currentWorld;
   const isLightWorld = world.level === 1; // light text vs dark text
-  const textColor = isLightWorld ? colors.dark : "white";
-  const textColorDim = isLightWorld ? colors.mid : "rgba(255,255,255,0.65)";
 
   const streakLabel =
     streak >= 10
@@ -744,6 +739,32 @@ export default function GameScreen({ navigation, route }) {
               ? streak + "×"
               : "—";
 
+  // ── LOADING ──────────────────────────────────────────────────
+  if (!save) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#0f1f43",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ fontSize: 48 }}>🐾</Text>
+        <Text
+          style={{
+            color: "white",
+            fontFamily: fonts.body,
+            marginTop: 12,
+            fontSize: 14,
+          }}
+        >
+          Loading...
+        </Text>
+      </View>
+    );
+  }
+
   // ── LEVEL CAP SCREEN (free users at level 10) ───────────────
   if (gamePhase === "levelcap") {
     return (
@@ -756,79 +777,88 @@ export default function GameScreen({ navigation, route }) {
           style={[s.overSafe, { paddingTop: insets.top }]}
           edges={["left", "right", "bottom"]}
         >
-          <View style={s.overCard}>
-            {/* Celebration */}
-            <Text style={{ fontSize: 72, marginBottom: 8 }}>🏆</Text>
-            <Text style={[s.overTitle, { color: "#FFD93D" }]}>
-              Level 10 Champion!
-            </Text>
-            <Text style={s.overSub}>
-              You've mastered the free levels! You're an emotional memory
-              superstar! 🌟
-            </Text>
-
-            {/* Stats */}
-            <View style={s.overStats}>
-              {[
-                { v: scoreRef.current, l: "Score" },
-                { v: levelRef.current, l: "Level" },
-                { v: save?.best || 0, l: "Best" },
-              ].map((st) => (
-                <View key={st.l} style={s.ostat}>
-                  <Text style={s.ostatV}>{st.v}</Text>
-                  <Text style={s.ostatL}>{st.l}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Paywall pitch */}
-            <View style={s.capBox}>
-              <Text style={s.capBoxTitle}>👑 Keep Going with Premium</Text>
-              <Text style={s.capBoxSub}>
-                Unlock all 9 Pals, unlimited levels, Speed/Mirror/Story modes
-                and the full Parent Dashboard — all for a one-time $7.99.
+          <ScrollView
+            contentContainerStyle={{
+              flexGrow: 1,
+              justifyContent: "center",
+              padding: spacing.lg,
+            }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={s.overCard}>
+              {/* Celebration */}
+              <Text style={{ fontSize: 72, marginBottom: 8 }}>🏆</Text>
+              <Text style={[s.overTitle, { color: "#FFD93D" }]}>
+                Level 10 Champion!
               </Text>
-              <View style={s.capFeatures}>
+              <Text style={s.overSub}>
+                You've mastered the free levels! You're an emotional memory
+                superstar! 🌟
+              </Text>
+
+              {/* Stats */}
+              <View style={s.overStats}>
                 {[
-                  "🐾 All 9 Pals",
-                  "♾️ Unlimited levels",
-                  "⚡ Speed mode",
-                  "🪞 Mirror mode",
-                  "📊 Parent Dashboard",
-                ].map((f, i) => (
-                  <View key={i} style={s.capFeatureRow}>
-                    <Text style={s.capFeatureTxt}>{f}</Text>
+                  { v: scoreRef.current, l: "Score" },
+                  { v: levelRef.current, l: "Level" },
+                  { v: save?.best || 0, l: "Best" },
+                ].map((st) => (
+                  <View key={st.l} style={s.ostat}>
+                    <Text style={s.ostatV}>{st.v}</Text>
+                    <Text style={s.ostatL}>{st.l}</Text>
                   </View>
                 ))}
               </View>
-            </View>
 
-            <TouchableOpacity
-              style={s.capCta}
-              onPress={() => {
-                navigation.navigate("Paywall", {});
-              }}
-              activeOpacity={0.88}
-            >
-              <LinearGradient
-                colors={["#FFD93D", "#FF9A3C"]}
-                style={s.capCtaGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              {/* Paywall pitch */}
+              <View style={s.capBox}>
+                <Text style={s.capBoxTitle}>👑 Keep Going with Premium</Text>
+                <Text style={s.capBoxSub}>
+                  Unlock all 9 Pals, unlimited levels, Speed/Mirror/Story modes
+                  and the full Parent Dashboard — all for a one-time $7.99.
+                </Text>
+                <View style={s.capFeatures}>
+                  {[
+                    "🐾 All 9 Pals",
+                    "♾️ Unlimited levels",
+                    "⚡ Speed mode",
+                    "🪞 Mirror mode",
+                    "📊 Parent Dashboard",
+                  ].map((f, i) => (
+                    <View key={i} style={s.capFeatureRow}>
+                      <Text style={s.capFeatureTxt}>{f}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={s.capCta}
+                onPress={() => {
+                  navigation.navigate("Paywall", {});
+                }}
+                activeOpacity={0.88}
               >
-                <Text style={s.capCtaTxt}>Unlock Premium — $7.99</Text>
-                <Text style={s.capCtaSub}>One-time · No subscription</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={["#FFD93D", "#FF9A3C"]}
+                  style={s.capCtaGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Text style={s.capCtaTxt}>Unlock Premium — $7.99</Text>
+                  <Text style={s.capCtaSub}>One-time · No subscription</Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
-            <Button
-              label="Play Again (Free)"
-              onPress={restartGame}
-              variant="soft"
-              style={{ marginBottom: 8 }}
-            />
-            <Button label="Back Home" onPress={quitGame} variant="soft" />
-          </View>
+              <Button
+                label="Play Again (Free)"
+                onPress={restartGame}
+                variant="soft"
+                style={{ marginBottom: 8 }}
+              />
+              <Button label="Back Home" onPress={quitGame} variant="soft" />
+            </View>
+          </ScrollView>
         </SafeAreaView>
       </View>
     );
@@ -871,59 +901,70 @@ export default function GameScreen({ navigation, route }) {
           style={[s.overSafe, { paddingTop: insets.top }]}
           edges={["left", "right", "bottom"]}
         >
-          <View style={s.overCard}>
-            <Text style={s.overMedal}>{medal}</Text>
-            <Text style={s.overTitle}>{title}</Text>
-            <Text style={s.overSub}>{sub}</Text>
-            <View style={[s.worldBadge, { backgroundColor: world.colors[1] }]}>
-              <Text style={s.worldBadgeTxt}>
-                {world.emoji} Reached: {world.name}
-              </Text>
-            </View>
-            <View style={s.overStats}>
-              {[
-                { v: score, l: "Score" },
-                { v: level, l: "Level" },
-                { v: save?.best || 0, l: "Best" },
-              ].map((st) => (
-                <View key={st.l} style={s.ostat}>
-                  <Text style={s.ostatV}>{st.v}</Text>
-                  <Text style={s.ostatL}>{st.l}</Text>
-                </View>
-              ))}
-            </View>
-            {Object.keys(sessionEmosRef.current).length > 0 && (
-              <View style={s.eosRow}>
-                <Text style={s.eosTitle}>Feelings you showed:</Text>
-                <View style={s.eosTags}>
-                  {Object.keys(sessionEmosRef.current).map((eid) => {
-                    const e = EMOTIONS.find((x) => x.id === eid);
-                    return e ? (
-                      <View
-                        key={eid}
-                        style={[s.eosTag, { backgroundColor: e.color }]}
-                      >
-                        <Text style={s.eosTagTxt}>
-                          {e.icon} {e.label}
-                        </Text>
-                      </View>
-                    ) : null;
-                  })}
-                </View>
+          <ScrollView
+            contentContainerStyle={{
+              flexGrow: 1,
+              justifyContent: "center",
+              padding: spacing.lg,
+            }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={s.overCard}>
+              <Text style={s.overMedal}>{medal}</Text>
+              <Text style={s.overTitle}>{title}</Text>
+              <Text style={s.overSub}>{sub}</Text>
+              <View
+                style={[s.worldBadge, { backgroundColor: world.colors[1] }]}
+              >
+                <Text style={s.worldBadgeTxt}>
+                  {world.emoji} Reached: {world.name}
+                </Text>
               </View>
-            )}
-            <Button
-              label="Play Again! 🎮"
-              onPress={restartGame}
-              variant="green"
-              style={{ marginBottom: 10 }}
-            />
-            <Button
-              label="Back Home"
-              onPress={() => navigation.goBack()}
-              variant="soft"
-            />
-          </View>
+              <View style={s.overStats}>
+                {[
+                  { v: score, l: "Score" },
+                  { v: level, l: "Level" },
+                  { v: save?.best || 0, l: "Best" },
+                ].map((st) => (
+                  <View key={st.l} style={s.ostat}>
+                    <Text style={s.ostatV}>{st.v}</Text>
+                    <Text style={s.ostatL}>{st.l}</Text>
+                  </View>
+                ))}
+              </View>
+              {Object.keys(sessionEmosRef.current).length > 0 && (
+                <View style={s.eosRow}>
+                  <Text style={s.eosTitle}>Feelings you showed:</Text>
+                  <View style={s.eosTags}>
+                    {Object.keys(sessionEmosRef.current).map((eid) => {
+                      const e = EMOTIONS.find((x) => x.id === eid);
+                      return e ? (
+                        <View
+                          key={eid}
+                          style={[s.eosTag, { backgroundColor: e.color }]}
+                        >
+                          <Text style={s.eosTagTxt}>
+                            {e.icon} {e.label}
+                          </Text>
+                        </View>
+                      ) : null;
+                    })}
+                  </View>
+                </View>
+              )}
+              <Button
+                label="Play Again! 🎮"
+                onPress={restartGame}
+                variant="green"
+                style={{ marginBottom: 10 }}
+              />
+              <Button
+                label="Back Home"
+                onPress={() => navigation.goBack()}
+                variant="soft"
+              />
+            </View>
+          </ScrollView>
         </SafeAreaView>
       </View>
     );
@@ -1479,13 +1520,14 @@ const s = StyleSheet.create({
   },
 
   // Game over
-  overSafe: { flex: 1, justifyContent: "center", padding: spacing.lg },
+  overSafe: { flex: 1 },
   overCard: {
     backgroundColor: "white",
     borderRadius: radius.xl,
-    padding: spacing.xl,
+    padding: spacing.lg,
     alignItems: "center",
     ...shadows.lg,
+    width: "100%",
   },
   overMedal: { fontSize: 72, marginBottom: 10 },
   overTitle: {
