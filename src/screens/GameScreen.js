@@ -177,6 +177,7 @@ export default function GameScreen({ navigation, route }) {
   const multiplierRef = useRef(1);
   const lastTwoEmosRef = useRef([]);
   const speedTimerRef = useRef(null);
+  const roundsRef = useRef(0); // total rounds completed
   const comboAnim = useRef(new Animated.Value(0)).current;
   const shieldAnim = useRef(new Animated.Value(1)).current;
   const palScale = useRef(new Animated.Value(1)).current;
@@ -387,6 +388,7 @@ export default function GameScreen({ navigation, route }) {
     shieldRef.current = false;
     multiplierRef.current = 1;
     lastTwoEmosRef.current = [];
+    roundsRef.current = 0;
 
     setSequence([]);
     setPlayerIdx(0);
@@ -510,7 +512,8 @@ export default function GameScreen({ navigation, route }) {
         () => {},
       );
 
-      const completedRounds = seqRef.current.length;
+      roundsRef.current += 1;
+      const completedRounds = roundsRef.current;
       const isLevelUp = completedRounds % 3 === 0;
 
       if (isLevelUp) {
@@ -545,6 +548,7 @@ export default function GameScreen({ navigation, route }) {
 
       multiplierRef.current = 1;
       setScoreMultiplier(1);
+      setGamePhase("showing"); // prevent frozen state during pause
       const pauseDur = isLevelUp ? 2500 : 1200;
       setTimeout(() => {
         if (!gameActiveRef.current) return;
