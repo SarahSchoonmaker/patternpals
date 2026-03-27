@@ -1,4 +1,4 @@
-// src/screens/GameScreen.js
+// src/screens/GameScreen.js — clean stable game loop
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -20,9 +20,10 @@ import { loadSave, recordGameEnd } from "../hooks/useStorage";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
 import { Button, BackButton, Pill } from "../components/UI";
 
-// ── Constants (outside component — never recreated) ──────────
+// ── Constants ────────────────────────────────────────────────
 const SPEED_TIME = 4000;
 const FREE_LEVEL_CAP = 10;
+const MAX_SEQ_LEN = 6;
 
 const WORLDS = [
   {
@@ -75,40 +76,42 @@ const COMBOS = [
     label: "DOUBLE JOY! 🎉",
     effect: "double",
     color: "#FFD93D",
-    desc: "2× Score!",
   },
   {
     pair: ["brave", "angry"],
     label: "POWER UP! 🛡️",
     effect: "shield",
     color: "#4D96FF",
-    desc: "Protected!",
   },
   {
     pair: ["silly", "happy"],
     label: "GIGGLE BOMB! 💣",
     effect: "slow",
     color: "#FF9A3C",
-    desc: "+5 sec!",
   },
   {
     pair: ["sleepy", "shy"],
     label: "DREAM TIME! 💤",
     effect: "slow",
     color: "#C77DFF",
-    desc: "Slow motion!",
   },
   {
     pair: ["scared", "brave"],
     label: "COURAGE! ⚡",
     effect: "bonus",
     color: "#6BCB77",
-    desc: "Bonus round!",
   },
 ];
 
-// Pre-computed stars — deterministic, never changes between renders
-const STARS = Array.from({ length: 30 }, (_, i) => ({
+const COMBO_HINTS = [
+  { emos: "😄🤩", desc: "2× Score", color: "#FFD93D" },
+  { emos: "💪😤", desc: "Shield", color: "#4D96FF" },
+  { emos: "🤪😄", desc: "+Time", color: "#FF9A3C" },
+  { emos: "😴😊", desc: "Slow-mo", color: "#C77DFF" },
+  { emos: "😱💪", desc: "+50pts", color: "#6BCB77" },
+];
+
+const STARS = Array.from({ length: 25 }, (_, i) => ({
   top: `${(i * 37.3 + 7) % 100}%`,
   left: `${(i * 61.8 + 13) % 100}%`,
   size: (i % 3) + 1,
@@ -123,9 +126,7 @@ function getWorld(level) {
   return w;
 }
 
-function checkCombo(lastTwo) {
-  if (!lastTwo || lastTwo.length < 2) return null;
-  const [a, b] = lastTwo;
+function checkCombo(a, b) {
   return (
     COMBOS.find(
       (c) =>
@@ -150,8 +151,7 @@ export default function GameScreen({ navigation, route }) {
   // ── State ─────────────────────────────────────────────────
   const [save, setSave] = useState(null);
   const [gamePhase, setGamePhase] = useState("idle");
-  const [sequence, setSequence] = useState([]);
-  const [playerIdx, setPlayerIdx] = useState(0);
+  const [displaySeq, setDisplaySeq] = useState([]);
   const [score, setScore] = useState(0);
   const [level, setLevel] = useState(1);
   const [streak, setStreak] = useState(0);
@@ -164,56 +164,55 @@ export default function GameScreen({ navigation, route }) {
   const [scoreMultiplier, setScoreMultiplier] = useState(1);
   const [comboPopLabel, setComboPopLabel] = useState(null);
   const [speedPct, setSpeedPct] = useState(1);
+  const [tapsLeft, setTapsLeft] = useState(0); // how many taps left in round
 
-  // ── Refs ──────────────────────────────────────────────────
-  const seqRef = useRef([]);
-  const playerIdxRef = useRef(0);
+  // ── Refs — single source of truth for game logic ──────────
+  const gameActive = useRef(false);
+  const seqRef = useRef([]); // the full sequence to show/echo
+  const tapIndexRef = useRef(0); // which tap the player is on (0-based)
+  const seqLenRef = useRef(0); // length of current sequence (frozen at round start)
   const scoreRef = useRef(0);
   const levelRef = useRef(1);
   const streakRef = useRef(0);
-  const sessionEmosRef = useRef({});
-  const gameActiveRef = useRef(false);
+  const roundsRef = useRef(0);
+  const sessionEmos = useRef({});
   const shieldRef = useRef(false);
   const multiplierRef = useRef(1);
-  const lastTwoEmosRef = useRef([]);
-  const speedTimerRef = useRef(null);
-  const roundsRef = useRef(0); // total rounds completed
+  const lastTwoRef = useRef([]);
+  const speedTimer = useRef(null);
   const comboAnim = useRef(new Animated.Value(0)).current;
   const shieldAnim = useRef(new Animated.Value(1)).current;
   const palScale = useRef(new Animated.Value(1)).current;
   const palRotate = useRef(new Animated.Value(0)).current;
   const palY = useRef(new Animated.Value(0)).current;
 
-  // ── Speed timer (defined before useEffect) ───────────────
+  // ── clearSpeedTimer — defined before useEffect ────────────
   const clearSpeedTimer = useCallback(() => {
-    if (speedTimerRef.current) {
-      clearInterval(speedTimerRef.current);
-      speedTimerRef.current = null;
+    if (speedTimer.current) {
+      clearInterval(speedTimer.current);
+      speedTimer.current = null;
     }
   }, []);
 
-  // ── Load save on mount ────────────────────────────────────
   useEffect(() => {
     loadSave().then((d) => {
       setSave(d);
       if (mode === "story") {
-        const idx = Math.floor(Math.random() * STORY_LINES.length);
-        setStoryLine(STORY_LINES[idx]);
+        setStoryLine(
+          STORY_LINES[Math.floor(Math.random() * STORY_LINES.length)],
+        );
       }
     });
-    return () => {
-      clearSpeedTimer();
-    };
+    return () => clearSpeedTimer();
   }, []);
 
-  // ── Derived values (safe — save may be null) ──────────────
   const currentPal = save
     ? PALS.find((p) => p.id === save.selPal) || PALS[0]
     : PALS[0];
   const isPremium = save?.isPremium === true;
 
   // ── Animations ────────────────────────────────────────────
-  function showComboPopup(label, color = "#FFD93D") {
+  function showComboPopup(label, color) {
     setComboPopLabel({ label, color });
     comboAnim.setValue(0);
     Animated.sequence([
@@ -231,73 +230,61 @@ export default function GameScreen({ navigation, route }) {
     palScale.setValue(1);
     palRotate.setValue(0);
     palY.setValue(0);
-    const anims = {
+    const a = {
       happy: () =>
         Animated.sequence([
-          Animated.spring(palY, { toValue: -22, useNativeDriver: true }),
+          Animated.spring(palY, { toValue: -20, useNativeDriver: true }),
           Animated.spring(palY, { toValue: 0, useNativeDriver: true }),
         ]),
       silly: () =>
         Animated.sequence([
           Animated.timing(palRotate, {
             toValue: -0.2,
-            duration: 150,
+            duration: 120,
             useNativeDriver: true,
           }),
           Animated.timing(palRotate, {
             toValue: 0.2,
-            duration: 150,
+            duration: 120,
             useNativeDriver: true,
           }),
           Animated.timing(palRotate, {
             toValue: 0,
-            duration: 150,
+            duration: 120,
             useNativeDriver: true,
           }),
         ]),
       brave: () =>
         Animated.sequence([
           Animated.spring(palScale, { toValue: 1.3, useNativeDriver: true }),
-          Animated.spring(palScale, { toValue: 1.0, useNativeDriver: true }),
+          Animated.spring(palScale, { toValue: 1, useNativeDriver: true }),
         ]),
       shy: () =>
         Animated.sequence([
           Animated.spring(palScale, { toValue: 0.75, useNativeDriver: true }),
-          Animated.spring(palScale, { toValue: 0.85, useNativeDriver: true }),
+          Animated.spring(palScale, { toValue: 0.9, useNativeDriver: true }),
         ]),
       sleepy: () =>
-        Animated.sequence([
-          Animated.timing(palY, {
-            toValue: 10,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.timing(palRotate, {
-            toValue: -0.15,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-        ]),
+        Animated.timing(palY, {
+          toValue: 8,
+          duration: 400,
+          useNativeDriver: true,
+        }),
       angry: () =>
         Animated.sequence([
           Animated.timing(palRotate, {
-            toValue: -0.1,
-            duration: 80,
+            toValue: -0.12,
+            duration: 70,
             useNativeDriver: true,
           }),
           Animated.timing(palRotate, {
-            toValue: 0.1,
-            duration: 80,
-            useNativeDriver: true,
-          }),
-          Animated.timing(palRotate, {
-            toValue: -0.1,
-            duration: 80,
+            toValue: 0.12,
+            duration: 70,
             useNativeDriver: true,
           }),
           Animated.timing(palRotate, {
             toValue: 0,
-            duration: 80,
+            duration: 70,
             useNativeDriver: true,
           }),
         ]),
@@ -305,17 +292,14 @@ export default function GameScreen({ navigation, route }) {
         Animated.sequence([
           Animated.spring(palScale, { toValue: 1.25, useNativeDriver: true }),
           Animated.spring(palScale, { toValue: 1.1, useNativeDriver: true }),
-          Animated.spring(palScale, { toValue: 1.2, useNativeDriver: true }),
-          Animated.spring(palScale, { toValue: 1.0, useNativeDriver: true }),
+          Animated.spring(palScale, { toValue: 1, useNativeDriver: true }),
         ]),
       scared: () =>
         Animated.sequence([
           Animated.spring(palScale, { toValue: 0.8, useNativeDriver: true }),
-          Animated.spring(palY, { toValue: 8, useNativeDriver: true }),
-          Animated.spring(palScale, { toValue: 0.9, useNativeDriver: true }),
+          Animated.spring(palScale, { toValue: 0.95, useNativeDriver: true }),
         ]),
-    };
-    const a = anims[emoId];
+    }[emoId];
     if (a)
       a().start(() => {
         palScale.setValue(1);
@@ -324,344 +308,309 @@ export default function GameScreen({ navigation, route }) {
       });
   }
 
-  function animateWrong() {
-    Animated.sequence([
-      Animated.timing(palRotate, {
-        toValue: -0.15,
-        duration: 80,
-        useNativeDriver: true,
-      }),
-      Animated.timing(palRotate, {
-        toValue: 0.15,
-        duration: 80,
-        useNativeDriver: true,
-      }),
-      Animated.timing(palRotate, {
-        toValue: -0.1,
-        duration: 80,
-        useNativeDriver: true,
-      }),
-      Animated.timing(palRotate, {
-        toValue: 0,
-        duration: 80,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }
-
   // ── Speed timer ───────────────────────────────────────────
   function startSpeedTimer() {
     if (mode !== "speed") return;
     setSpeedPct(1);
     const start = Date.now();
-    speedTimerRef.current = setInterval(() => {
+    speedTimer.current = setInterval(() => {
       const pct = Math.max(0, 1 - (Date.now() - start) / SPEED_TIME);
       setSpeedPct(pct);
       if (pct <= 0) {
         clearSpeedTimer();
-        handleWrong();
+        doWrong();
       }
     }, 100);
   }
 
-  // ── World transition ──────────────────────────────────────
-  function transitionToWorld(newLevel) {
-    const newWorld = getWorld(newLevel);
-    if (newWorld.level !== currentWorld.level) {
-      setCurrentWorld(newWorld);
-      showComboPopup(
-        `${newWorld.emoji} ${newWorld.name}!`,
-        newWorld.colors[1] || "#4D96FF",
-      );
+  // ── CORE: show a sequence then let player echo it ─────────
+  async function playRound(seq, lvl) {
+    if (!gameActive.current) return;
+
+    // Freeze the sequence length NOW — this is what the player must echo
+    const frozen = [...seq];
+    seqRef.current = frozen;
+    seqLenRef.current = frozen.length;
+    tapIndexRef.current = 0;
+
+    setDisplaySeq(frozen);
+    setGamePhase("showing");
+    setStageMsg("Watch carefully! 👀");
+    setLitBtn(null);
+    setCurrentEmo(null);
+
+    const delay = Math.max(400, 800 - lvl * 35);
+    const litDur = Math.max(250, 500 - lvl * 25);
+
+    // Show the sequence
+    for (let i = 0; i < frozen.length; i++) {
+      await sleep(delay);
+      if (!gameActive.current) return;
+
+      const displayIdx =
+        mode === "mirror" ? frozen[frozen.length - 1 - i] : frozen[i];
+      const emo = EMOTIONS[displayIdx];
+      if (!emo) continue;
+
+      setLitBtn(emo.id);
+      setCurrentEmo(emo);
+      animatePal(emo.id);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      await sleep(litDur);
+      setLitBtn(null);
+    }
+
+    await sleep(400);
+    if (!gameActive.current) return;
+
+    setCurrentEmo(null);
+    setTapsLeft(frozen.length);
+    setGamePhase("player");
+
+    if (mode === "speed") {
+      setStageMsg(`Show all ${frozen.length} feelings! ⚡`);
+      startSpeedTimer();
+    } else {
+      setStageMsg(`Show all ${frozen.length} feelings! 🎯`);
     }
   }
 
-  // ── Game flow ─────────────────────────────────────────────
+  // ── Start game ────────────────────────────────────────────
   async function startGame() {
-    gameActiveRef.current = true;
-    seqRef.current = [];
-    playerIdxRef.current = 0;
+    gameActive.current = true;
     scoreRef.current = 0;
     levelRef.current = 1;
     streakRef.current = 0;
-    sessionEmosRef.current = {};
+    roundsRef.current = 0;
+    sessionEmos.current = {};
     shieldRef.current = false;
     multiplierRef.current = 1;
-    lastTwoEmosRef.current = [];
-    roundsRef.current = 0;
+    lastTwoRef.current = [];
 
-    setSequence([]);
-    setPlayerIdx(0);
     setScore(0);
     setLevel(1);
     setStreak(0);
     setShieldActive(false);
     setScoreMultiplier(1);
     setCurrentWorld(WORLDS[0]);
-    setGamePhase("showing");
 
-    await addToSequence([], 1);
+    // Start with sequence of 1
+    const firstSeq = [Math.floor(Math.random() * EMOTIONS.length)];
+    await playRound(firstSeq, 1);
   }
 
-  async function addToSequence(currentSeq, currentLevel) {
-    const next = Math.floor(Math.random() * EMOTIONS.length);
-    const MAX_SEQ = 6;
-    const raw = [...currentSeq, next];
-    const newSeq = raw.length > MAX_SEQ ? raw.slice(-MAX_SEQ) : raw;
-
-    seqRef.current = newSeq;
-    playerIdxRef.current = 0;
-    setSequence(newSeq);
-    setPlayerIdx(0);
-    setGamePhase("showing");
-    setStageMsg("Watch carefully! 👀");
-
-    const delay = Math.max(400, 800 - currentLevel * 35);
-    const litDur = Math.max(250, 500 - currentLevel * 25);
-
-    for (let i = 0; i < newSeq.length; i++) {
-      await sleep(delay);
-      if (!gameActiveRef.current) return;
-      const displayIdx =
-        mode === "mirror" ? newSeq[newSeq.length - 1 - i] : newSeq[i];
-      const emo = EMOTIONS[displayIdx];
-      if (!emo) continue;
-      setLitBtn(emo.id);
-      setCurrentEmo(emo);
-      animatePal(emo.id);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      await sleep(litDur);
-      setLitBtn(null);
-    }
-
-    await sleep(350);
-    if (!gameActiveRef.current) return;
-    setCurrentEmo(null);
-    setGamePhase("player");
-    if (mode === "speed") {
-      setStageMsg("Quick! Show the feelings! ⚡");
-      startSpeedTimer();
-    } else {
-      setStageMsg("Your turn! Show the feelings! 🎯");
-    }
-  }
-
-  // ── Player input ──────────────────────────────────────────
+  // ── Player taps a button ──────────────────────────────────
   function handleEmoPress(emoId) {
     if (gamePhase !== "player") return;
+    if (!gameActive.current) return;
     clearSpeedTimer();
 
+    const tapIdx = tapIndexRef.current;
     const seq = seqRef.current;
-    const idx = playerIdxRef.current;
-    if (!seq[idx]) return;
+    const seqLen = seqLenRef.current;
 
-    const expected =
-      mode === "mirror"
-        ? EMOTIONS[seq[seq.length - 1 - idx]]?.id
-        : EMOTIONS[seq[idx]]?.id;
+    if (tapIdx >= seqLen) return; // safety
 
+    const expectedIdx =
+      mode === "mirror" ? seq[seqLen - 1 - tapIdx] : seq[tapIdx];
+
+    const expected = EMOTIONS[expectedIdx]?.id;
     if (!expected) return;
 
     if (emoId === expected) {
-      handleCorrect(emoId, idx);
+      onCorrectTap(emoId, tapIdx, seqLen);
     } else {
       if (shieldRef.current) {
         shieldRef.current = false;
         setShieldActive(false);
         showComboPopup("🛡️ Shield Blocked It!", "#4D96FF");
-        setStageMsg("Shield protected you! Try again! 🛡️");
+        setStageMsg("Shield saved you! Try again! 🛡️");
         return;
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
         () => {},
       );
-      animateWrong();
-      handleWrong();
+      onWrongTap();
     }
   }
 
-  async function handleCorrect(emoId, idx) {
-    const seq = seqRef.current; // always read from ref, never from stale closure
+  // ── Correct tap ───────────────────────────────────────────
+  function onCorrectTap(emoId, tapIdx, seqLen) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
-    const newLastTwo = [...lastTwoEmosRef.current, emoId].slice(-2);
-    lastTwoEmosRef.current = newLastTwo;
-    const combo = checkCombo(newLastTwo);
-    if (combo) {
-      applyCombo(combo);
-      lastTwoEmosRef.current = [];
+    // Combo check
+    const prev = lastTwoRef.current;
+    const newTwo = [...prev, emoId].slice(-2);
+    lastTwoRef.current = newTwo;
+    if (newTwo.length === 2) {
+      const combo = checkCombo(newTwo[0], newTwo[1]);
+      if (combo) {
+        applyCombo(combo);
+        lastTwoRef.current = [];
+      }
     }
 
+    // Score
     streakRef.current += 1;
-    const baseGain = 10 + (streakRef.current > 2 ? streakRef.current * 3 : 0);
-    const gain = Math.round(baseGain * multiplierRef.current);
+    const gain = Math.round(
+      (10 + (streakRef.current > 2 ? streakRef.current * 2 : 0)) *
+        multiplierRef.current,
+    );
     scoreRef.current += gain;
     setScore(scoreRef.current);
     setStreak(streakRef.current);
 
-    sessionEmosRef.current[emoId] = (sessionEmosRef.current[emoId] || 0) + 1;
+    // Track emotion
+    sessionEmos.current[emoId] = (sessionEmos.current[emoId] || 0) + 1;
 
-    const newIdx = idx + 1;
-    playerIdxRef.current = newIdx;
-    setPlayerIdx(newIdx);
+    const nextTap = tapIdx + 1;
+    tapIndexRef.current = nextTap;
+    setTapsLeft(seqLen - nextTap);
 
-    if (newIdx >= seq.length) {
-      // Round complete
-      scoreRef.current += levelRef.current * 8;
-      setScore(scoreRef.current);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-        () => {},
-      );
-
-      roundsRef.current += 1;
-      const completedRounds = roundsRef.current;
-      const isLevelUp = completedRounds % 3 === 0;
-
-      if (isLevelUp) {
-        const nextLevel = levelRef.current + 1;
-        // Free level cap check
-        if (!isPremium && nextLevel > FREE_LEVEL_CAP) {
-          gameActiveRef.current = false;
-          setGamePhase("levelcap");
-          recordGameEnd(
-            scoreRef.current,
-            levelRef.current,
-            streakRef.current,
-            sessionEmosRef.current,
-          )
-            .then((s) => setSave(s))
-            .catch(() => {});
-          return;
-        }
-        levelRef.current = nextLevel;
-        setLevel(nextLevel);
-        transitionToWorld(nextLevel);
-        setStageMsg(`${getWorld(nextLevel).emoji} Level Up! New World!`);
-      } else {
-        const msgs = [
-          "Fantastic! 🌟",
-          "You got it! 💥",
-          "Perfect! 🎯",
-          "Amazing! ✨",
-        ];
-        setStageMsg(msgs[Math.floor(Math.random() * msgs.length)]);
-      }
-
-      multiplierRef.current = 1;
-      setScoreMultiplier(1);
-
-      // Use async/await sleep instead of setTimeout to avoid closure issues
-      const pauseDur = isLevelUp ? 2000 : 1000;
-      setGamePhase("showing");
-      await sleep(pauseDur);
-      if (!gameActiveRef.current) return;
-      await addToSequence(seqRef.current, levelRef.current);
+    if (nextTap >= seqLen) {
+      // ── Round complete ──────────────────────────────────
+      onRoundComplete();
     }
   }
 
-  function applyCombo(combo) {
-    showComboPopup(combo.label, combo.color);
+  // ── Round complete — purely synchronous, schedules next round ──
+  function onRoundComplete() {
+    // Bonus points for finishing round
+    scoreRef.current += levelRef.current * 5;
+    setScore(scoreRef.current);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
       () => {},
     );
-    switch (combo.effect) {
-      case "double":
-        multiplierRef.current = 2;
-        setScoreMultiplier(2);
-        break;
-      case "shield":
-        shieldRef.current = true;
-        setShieldActive(true);
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(shieldAnim, {
-              toValue: 1.15,
-              duration: 600,
-              useNativeDriver: true,
-            }),
-            Animated.timing(shieldAnim, {
-              toValue: 1.0,
-              duration: 600,
-              useNativeDriver: true,
-            }),
-          ]),
-          { iterations: 5 },
-        ).start();
-        break;
-      case "bonus":
-        scoreRef.current += 50;
-        setScore(scoreRef.current);
-        break;
+
+    roundsRef.current += 1;
+    const rounds = roundsRef.current;
+
+    // Level up every 3 rounds
+    if (rounds % 3 === 0) {
+      const nextLevel = levelRef.current + 1;
+
+      // Free level cap
+      if (!isPremium && nextLevel > FREE_LEVEL_CAP) {
+        gameActive.current = false;
+        setGamePhase("levelcap");
+        recordGameEnd(
+          scoreRef.current,
+          levelRef.current,
+          streakRef.current,
+          sessionEmos.current,
+        )
+          .then((s) => setSave(s))
+          .catch(() => {});
+        return;
+      }
+
+      levelRef.current = nextLevel;
+      setLevel(nextLevel);
+      const newWorld = getWorld(nextLevel);
+      setCurrentWorld(newWorld);
+      setStageMsg(`${newWorld.emoji} Level ${nextLevel}! New World!`);
+      showComboPopup(
+        `${newWorld.emoji} Level Up!`,
+        newWorld.colors[1] || "#4D96FF",
+      );
+    } else {
+      const msgs = [
+        "Fantastic! 🌟",
+        "You got it! 💥",
+        "Perfect! 🎯",
+        "Amazing! ✨",
+        "Brilliant! 🔥",
+      ];
+      setStageMsg(msgs[rounds % msgs.length]);
     }
+
+    multiplierRef.current = 1;
+    setScoreMultiplier(1);
+    setGamePhase("between"); // freeze buttons between rounds
+
+    // Schedule next round with a plain setTimeout
+    const pause = rounds % 3 === 0 ? 2000 : 1000;
+    setTimeout(() => {
+      if (!gameActive.current) return;
+      // Add one new emotion to sequence, cap at MAX_SEQ_LEN
+      const current = seqRef.current;
+      const next = Math.floor(Math.random() * EMOTIONS.length);
+      const raw = [...current, next];
+      const newSeq = raw.length > MAX_SEQ_LEN ? raw.slice(-MAX_SEQ_LEN) : raw;
+      playRound(newSeq, levelRef.current);
+    }, pause);
   }
 
-  async function handleWrong() {
-    if (!gameActiveRef.current) return;
+  // ── Wrong tap — replay same sequence ─────────────────────
+  function onWrongTap() {
+    if (!gameActive.current) return;
 
     streakRef.current = 0;
     setStreak(0);
     multiplierRef.current = 1;
     setScoreMultiplier(1);
-    lastTwoEmosRef.current = [];
+    lastTwoRef.current = [];
 
     const msgs = [
-      { label: "Almost! Try again! 💪", color: "#FF9A3C" },
-      { label: "So close! Watch again 👀", color: "#4D96FF" },
-      { label: "Keep going! You got this!", color: "#6BCB77" },
+      { label: "Almost! Watch again 👀", color: "#FF9A3C" },
+      { label: "So close! Try again 💪", color: "#4D96FF" },
       { label: "Watch carefully! 🧠", color: "#C77DFF" },
+      { label: "You got this! Keep going!", color: "#6BCB77" },
     ];
     const msg = msgs[Math.floor(Math.random() * msgs.length)];
     showComboPopup(msg.label, msg.color);
-    setStageMsg("Watch carefully this time! 👀");
-    setGamePhase("showing");
+    setGamePhase("between");
 
-    await sleep(1400);
-    if (!gameActiveRef.current) return;
-
-    const currentSeq = seqRef.current;
-    playerIdxRef.current = 0;
-    setPlayerIdx(0);
-    setStageMsg("Watch carefully! 👀");
-
-    const delay = Math.max(400, 800 - levelRef.current * 35);
-    const litDur = Math.max(250, 500 - levelRef.current * 25);
-
-    for (let i = 0; i < currentSeq.length; i++) {
-      await sleep(delay);
-      if (!gameActiveRef.current) return;
-      const displayIdx =
-        mode === "mirror"
-          ? currentSeq[currentSeq.length - 1 - i]
-          : currentSeq[i];
-      const emo = EMOTIONS[displayIdx];
-      if (!emo) continue;
-      setLitBtn(emo.id);
-      setCurrentEmo(emo);
-      animatePal(emo.id);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      await sleep(litDur);
-      setLitBtn(null);
-    }
-
-    await sleep(350);
-    if (!gameActiveRef.current) return;
-    setCurrentEmo(null);
-    setGamePhase("player");
-    if (mode === "speed") {
-      setStageMsg("Quick! ⚡");
-      startSpeedTimer();
-    } else setStageMsg("Try again! You can do it! 💪");
+    // Replay same sequence after short pause
+    setTimeout(() => {
+      if (!gameActive.current) return;
+      playRound(seqRef.current, levelRef.current);
+    }, 1000);
   }
 
-  async function quitGame() {
-    gameActiveRef.current = false;
+  // ── Combos ────────────────────────────────────────────────
+  function applyCombo(combo) {
+    showComboPopup(combo.label, combo.color);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+      () => {},
+    );
+    if (combo.effect === "double") {
+      multiplierRef.current = 2;
+      setScoreMultiplier(2);
+    } else if (combo.effect === "shield") {
+      shieldRef.current = true;
+      setShieldActive(true);
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(shieldAnim, {
+            toValue: 1.15,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shieldAnim, {
+            toValue: 1.0,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+        ]),
+        { iterations: 4 },
+      ).start();
+    } else if (combo.effect === "bonus") {
+      scoreRef.current += 50;
+      setScore(scoreRef.current);
+    }
+  }
+
+  // ── Quit ──────────────────────────────────────────────────
+  function quitGame() {
+    gameActive.current = false;
     clearSpeedTimer();
     if (scoreRef.current > 0) {
       recordGameEnd(
         scoreRef.current,
         levelRef.current,
         streakRef.current,
-        sessionEmosRef.current,
+        sessionEmos.current,
       )
         .then((s) => {
           setSave(s);
@@ -677,7 +626,7 @@ export default function GameScreen({ navigation, route }) {
     startGame();
   }
 
-  // ── Derived render values ─────────────────────────────────
+  // ── Render helpers ────────────────────────────────────────
   const palRotateDeg = palRotate.interpolate({
     inputRange: [-1, 1],
     outputRange: ["-360deg", "360deg"],
@@ -685,8 +634,7 @@ export default function GameScreen({ navigation, route }) {
   const speedColor =
     speedPct > 0.5 ? colors.green : speedPct > 0.25 ? colors.gold : colors.red;
   const world = currentWorld;
-  const isLightWorld = world.level === 1;
-
+  const isLight = world.level === 1;
   const streakLabel =
     streak >= 10
       ? "👑"
@@ -697,10 +645,10 @@ export default function GameScreen({ navigation, route }) {
           : streak >= 3
             ? "🔥"
             : streak > 0
-              ? streak + "×"
+              ? `${streak}×`
               : "—";
 
-  // ── Loading screen ────────────────────────────────────────
+  // ── Loading ───────────────────────────────────────────────
   if (!save) {
     return (
       <View
@@ -719,7 +667,7 @@ export default function GameScreen({ navigation, route }) {
     );
   }
 
-  // ── Level cap screen ──────────────────────────────────────
+  // ── Level cap ─────────────────────────────────────────────
   if (gamePhase === "levelcap") {
     return (
       <View style={s.root}>
@@ -737,21 +685,20 @@ export default function GameScreen({ navigation, route }) {
               justifyContent: "center",
               padding: spacing.lg,
             }}
-            showsVerticalScrollIndicator={false}
           >
             <View style={s.overCard}>
-              <Text style={{ fontSize: 72, marginBottom: 8 }}>🏆</Text>
+              <Text style={{ fontSize: 64, marginBottom: 8 }}>🏆</Text>
               <Text style={[s.overTitle, { color: "#FFD93D" }]}>
                 Level 10 Champion!
               </Text>
               <Text style={s.overSub}>
-                You have mastered the free levels! You are an emotional memory
+                You have mastered the free levels — you are an emotional memory
                 superstar!
               </Text>
               <View style={s.overStats}>
                 {[
-                  { v: scoreRef.current, l: "Score" },
-                  { v: levelRef.current, l: "Level" },
+                  { v: score, l: "Score" },
+                  { v: level, l: "Level" },
                   { v: save.best || 0, l: "Best" },
                 ].map((st) => (
                   <View key={st.l} style={s.ostat}>
@@ -763,8 +710,8 @@ export default function GameScreen({ navigation, route }) {
               <View style={s.capBox}>
                 <Text style={s.capBoxTitle}>Keep Going with Premium 👑</Text>
                 <Text style={s.capBoxSub}>
-                  Unlock all 9 Pals, unlimited levels, Speed, Mirror and Story
-                  modes for a one-time $7.99.
+                  Unlock all 9 Pals, unlimited levels and all game modes for a
+                  one-time $7.99.
                 </Text>
               </View>
               <TouchableOpacity
@@ -774,12 +721,11 @@ export default function GameScreen({ navigation, route }) {
               >
                 <LinearGradient
                   colors={["#FFD93D", "#FF9A3C"]}
-                  style={s.capCtaGradient}
+                  style={s.capCtaGrad}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
                   <Text style={s.capCtaTxt}>Unlock Premium — $7.99</Text>
-                  <Text style={s.capCtaSub}>One-time · No subscription</Text>
                 </LinearGradient>
               </TouchableOpacity>
               <Button
@@ -800,7 +746,7 @@ export default function GameScreen({ navigation, route }) {
     );
   }
 
-  // ── Game over / session summary ───────────────────────────
+  // ── Game over ─────────────────────────────────────────────
   if (gamePhase === "gameover") {
     const medal =
       score >= 200
@@ -834,10 +780,9 @@ export default function GameScreen({ navigation, route }) {
               justifyContent: "center",
               padding: spacing.lg,
             }}
-            showsVerticalScrollIndicator={false}
           >
             <View style={s.overCard}>
-              <Text style={{ fontSize: 72, marginBottom: 8 }}>{medal}</Text>
+              <Text style={{ fontSize: 64, marginBottom: 8 }}>{medal}</Text>
               <Text style={s.overTitle}>{title}</Text>
               <View
                 style={[
@@ -880,28 +825,30 @@ export default function GameScreen({ navigation, route }) {
   }
 
   // ── Main game ─────────────────────────────────────────────
+  const isPlayerTurn = gamePhase === "player";
+
   return (
     <View style={s.root}>
       <StatusBar
-        barStyle={isLightWorld ? "dark-content" : "light-content"}
+        barStyle={isLight ? "dark-content" : "light-content"}
         translucent
         backgroundColor="transparent"
       />
       <LinearGradient colors={world.colors} style={StyleSheet.absoluteFill} />
 
-      {!isLightWorld && (
+      {!isLight && (
         <View style={s.starsWrap} pointerEvents="none">
-          {STARS.map((star, i) => (
+          {STARS.map((st, i) => (
             <View
               key={i}
               style={[
                 s.star,
                 {
-                  top: star.top,
-                  left: star.left,
-                  width: star.size,
-                  height: star.size,
-                  opacity: star.opacity,
+                  top: st.top,
+                  left: st.left,
+                  width: st.size,
+                  height: st.size,
+                  opacity: st.opacity,
                 },
               ]}
             />
@@ -925,7 +872,9 @@ export default function GameScreen({ navigation, route }) {
           </View>
 
           {/* World banner */}
-          <View style={[s.worldBanner, { backgroundColor: "rgba(0,0,0,0.2)" }]}>
+          <View
+            style={[s.worldBanner, { backgroundColor: "rgba(0,0,0,0.25)" }]}
+          >
             <Text style={s.worldBannerTxt}>
               {world.emoji} {world.name}
             </Text>
@@ -943,21 +892,18 @@ export default function GameScreen({ navigation, route }) {
             )}
           </View>
 
-          {/* Combo hint strip */}
+          {/* Combo hints */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={s.comboStrip}
+            style={{ marginBottom: spacing.sm }}
           >
-            {COMBOS.map((c, i) => (
+            {COMBO_HINTS.map((c, i) => (
               <View
                 key={i}
                 style={[s.comboHint, { borderColor: c.color + "80" }]}
               >
-                <Text style={s.comboHintEmos}>
-                  {EMOTIONS.find((e) => e.id === c.pair[0])?.icon}
-                  {EMOTIONS.find((e) => e.id === c.pair[1])?.icon}
-                </Text>
+                <Text style={{ fontSize: 15 }}>{c.emos}</Text>
                 <Text style={[s.comboHintLabel, { color: c.color }]}>
                   {c.desc}
                 </Text>
@@ -965,7 +911,7 @@ export default function GameScreen({ navigation, route }) {
             ))}
           </ScrollView>
 
-          {/* Story bubble */}
+          {/* Story */}
           {mode === "story" && storyLine && (
             <View
               style={[
@@ -973,14 +919,14 @@ export default function GameScreen({ navigation, route }) {
                 { backgroundColor: "rgba(255,255,255,0.15)" },
               ]}
             >
-              <Text style={s.storyPal}>
+              <Text style={{ fontSize: 42 }}>
                 {(PALS.find((p) => p.id === storyLine.pal) || PALS[0]).emoji}
               </Text>
-              <View style={s.storyText}>
+              <View style={{ flex: 1 }}>
                 <Text
                   style={[
                     s.storyName,
-                    { color: isLightWorld ? colors.blue : "#74c0fc" },
+                    { color: isLight ? colors.blue : "#74c0fc" },
                   ]}
                 >
                   {storyLine.pal}
@@ -988,7 +934,7 @@ export default function GameScreen({ navigation, route }) {
                 <Text
                   style={[
                     s.storyLine,
-                    { color: isLightWorld ? colors.dark : "white" },
+                    { color: isLight ? colors.dark : "white" },
                   ]}
                 >
                   {storyLine.text}
@@ -998,7 +944,7 @@ export default function GameScreen({ navigation, route }) {
           )}
 
           {/* Speed bar */}
-          {mode === "speed" && gamePhase === "player" && (
+          {mode === "speed" && isPlayerTurn && (
             <View style={s.speedBar}>
               <View
                 style={[
@@ -1013,19 +959,19 @@ export default function GameScreen({ navigation, route }) {
           <LinearGradient colors={world.stageColors} style={s.stage}>
             <View
               style={[
-                s.emoLabelWrap,
+                s.emoLabel,
                 {
                   backgroundColor: currentEmo?.color || "rgba(255,255,255,0.2)",
                 },
               ]}
             >
-              <Text style={s.emoLabelText}>
+              <Text style={s.emoLabelTxt}>
                 {currentEmo ? `${currentEmo.icon} ${currentEmo.label}` : "?"}
               </Text>
             </View>
             <Animated.Text
               style={[
-                s.stagePal,
+                s.palEmoji,
                 {
                   transform: [
                     { scale: palScale },
@@ -1037,33 +983,33 @@ export default function GameScreen({ navigation, route }) {
             >
               {currentPal.emoji}
             </Animated.Text>
-            <Text style={[s.stageMsg, { color: "rgba(255,255,255,0.85)" }]}>
+            <Text style={[s.stageMsg, { color: "rgba(255,255,255,0.9)" }]}>
               {stageMsg}
             </Text>
           </LinearGradient>
 
           {/* Sequence dots */}
           <View style={s.seqRow}>
-            {sequence.map((idx, i) => (
+            {displaySeq.map((idx, i) => (
               <View
                 key={i}
                 style={[
                   s.seqDot,
-                  i < playerIdx && {
+                  i < tapIndexRef.current && {
                     backgroundColor: EMOTIONS[idx]?.color || "#aaa",
                     opacity: 0.4,
                   },
-                  i === playerIdx &&
-                    gamePhase === "player" && {
+                  i === tapIndexRef.current &&
+                    isPlayerTurn && {
                       backgroundColor: EMOTIONS[idx]?.color || "#aaa",
-                      transform: [{ scale: 1.3 }],
+                      transform: [{ scale: 1.35 }],
                     },
                 ]}
               />
             ))}
           </View>
 
-          {/* Level bar */}
+          {/* Rounds to level up */}
           <View style={s.levelRow}>
             <View style={s.lvlBadge}>
               <Text style={s.lvlBadgeTxt}>Level {level}</Text>
@@ -1073,15 +1019,23 @@ export default function GameScreen({ navigation, route }) {
                 style={[
                   s.lvlFill,
                   {
-                    width: `${((sequence.length % 3) / 3) * 100}%`,
-                    backgroundColor: isLightWorld ? colors.green : colors.gold,
+                    width: `${((roundsRef.current % 3) / 3) * 100}%`,
+                    backgroundColor: isLight ? colors.green : colors.gold,
                   },
                 ]}
               />
             </View>
+            <Text
+              style={[
+                s.roundHint,
+                { color: isLight ? colors.dim : "rgba(255,255,255,0.5)" },
+              ]}
+            >
+              {3 - (roundsRef.current % 3)} to level up
+            </Text>
           </View>
 
-          {/* Emotion grid */}
+          {/* Emotion buttons */}
           <View style={s.emoGrid}>
             {EMOTIONS.map((e) => {
               const isLit = litBtn === e.id;
@@ -1091,7 +1045,7 @@ export default function GameScreen({ navigation, route }) {
                   style={[
                     s.emoBtn,
                     {
-                      backgroundColor: isLightWorld
+                      backgroundColor: isLight
                         ? "white"
                         : "rgba(255,255,255,0.12)",
                     },
@@ -1100,11 +1054,11 @@ export default function GameScreen({ navigation, route }) {
                       borderColor: e.color,
                       transform: [{ scale: 1.08 }],
                     },
-                    gamePhase !== "player" && s.emoBtnDisabled,
+                    !isPlayerTurn && s.emoBtnDisabled,
                   ]}
                   onPress={() => handleEmoPress(e.id)}
-                  disabled={gamePhase !== "player"}
-                  activeOpacity={0.8}
+                  disabled={!isPlayerTurn}
+                  activeOpacity={0.75}
                 >
                   <Text style={s.emoBtnIcon}>{e.icon}</Text>
                   <Text
@@ -1113,7 +1067,7 @@ export default function GameScreen({ navigation, route }) {
                       {
                         color: isLit
                           ? "white"
-                          : isLightWorld
+                          : isLight
                             ? colors.mid
                             : "rgba(255,255,255,0.7)",
                       },
@@ -1128,16 +1082,15 @@ export default function GameScreen({ navigation, route }) {
 
           {gamePhase === "idle" && (
             <Button
-              label="▶ Start!"
+              label="▶  Start!"
               onPress={startGame}
               variant="green"
-              style={s.startBtn}
+              style={{ marginTop: 8 }}
             />
           )}
         </ScrollView>
       </SafeAreaView>
 
-      {/* Combo popup */}
       {comboPopLabel && (
         <Animated.View
           style={[
@@ -1227,7 +1180,6 @@ const s = StyleSheet.create({
     fontWeight: "900",
   },
 
-  comboStrip: { marginBottom: spacing.sm },
   comboHint: {
     backgroundColor: "rgba(255,255,255,0.1)",
     borderRadius: radius.md,
@@ -1237,7 +1189,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
   },
-  comboHintEmos: { fontSize: 16 },
   comboHintLabel: {
     fontFamily: fonts.body,
     fontSize: 9,
@@ -1252,8 +1203,6 @@ const s = StyleSheet.create({
     marginBottom: spacing.md,
     gap: 12,
   },
-  storyPal: { fontSize: 44 },
-  storyText: { flex: 1 },
   storyName: { fontFamily: fonts.display, fontSize: 13, marginBottom: 3 },
   storyLine: { fontFamily: fonts.body, fontSize: 13, lineHeight: 20 },
 
@@ -1272,17 +1221,17 @@ const s = StyleSheet.create({
     alignItems: "center",
     marginBottom: spacing.md,
     ...shadows.lg,
-    minHeight: 200,
+    minHeight: 190,
     justifyContent: "center",
   },
-  emoLabelWrap: {
-    borderRadius: radius.full,
+  emoLabel: {
+    borderRadius: 50,
     paddingVertical: 6,
     paddingHorizontal: 20,
     marginBottom: 10,
   },
-  emoLabelText: { fontFamily: fonts.display, fontSize: 20, color: "white" },
-  stagePal: { fontSize: 88, marginBottom: 8 },
+  emoLabelTxt: { fontFamily: fonts.display, fontSize: 20, color: "white" },
+  palEmoji: { fontSize: 84, marginBottom: 6 },
   stageMsg: { fontFamily: fonts.body, fontSize: 14, textAlign: "center" },
 
   seqRow: {
@@ -1291,12 +1240,12 @@ const s = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     marginBottom: spacing.sm,
-    minHeight: 28,
+    minHeight: 26,
   },
   seqDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: "rgba(255,255,255,0.3)",
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.5)",
@@ -1305,24 +1254,30 @@ const s = StyleSheet.create({
   levelRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     marginBottom: spacing.md,
   },
   lvlBadge: {
-    backgroundColor: "rgba(0,0,0,0.35)",
-    borderRadius: radius.full,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    borderRadius: 50,
     paddingVertical: 3,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
   },
-  lvlBadgeTxt: { fontFamily: fonts.display, fontSize: 13, color: "white" },
+  lvlBadgeTxt: { fontFamily: fonts.display, fontSize: 12, color: "white" },
   lvlTrack: {
     flex: 1,
-    height: 10,
+    height: 8,
     backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 8,
     overflow: "hidden",
   },
-  lvlFill: { height: 10, borderRadius: 8 },
+  lvlFill: { height: 8, borderRadius: 8 },
+  roundHint: {
+    fontFamily: fonts.body,
+    fontSize: 10,
+    minWidth: 70,
+    textAlign: "right",
+  },
 
   emoGrid: {
     flexDirection: "row",
@@ -1340,7 +1295,7 @@ const s = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.2)",
     ...shadows.sm,
   },
-  emoBtnDisabled: { opacity: 0.55 },
+  emoBtnDisabled: { opacity: 0.5 },
   emoBtnIcon: { fontSize: 26, marginBottom: 3 },
   emoBtnLabel: {
     fontFamily: fonts.body,
@@ -1348,7 +1303,6 @@ const s = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
-  startBtn: { marginTop: 8 },
 
   comboPop: {
     position: "absolute",
@@ -1361,7 +1315,7 @@ const s = StyleSheet.create({
   },
   comboPopTxt: {
     fontFamily: fonts.displayBold,
-    fontSize: 24,
+    fontSize: 22,
     color: "white",
     fontWeight: "900",
   },
@@ -1376,7 +1330,7 @@ const s = StyleSheet.create({
   },
   overTitle: {
     fontFamily: fonts.displayBold,
-    fontSize: 28,
+    fontSize: 26,
     color: colors.dark,
     marginBottom: 8,
     textAlign: "center",
@@ -1391,9 +1345,9 @@ const s = StyleSheet.create({
   },
   worldBadge: {
     borderRadius: radius.lg,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    marginBottom: 14,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    marginBottom: 12,
   },
   worldBadgeTxt: {
     fontFamily: fonts.display,
@@ -1406,7 +1360,7 @@ const s = StyleSheet.create({
     backgroundColor: "#f5faff",
     borderRadius: radius.md,
     padding: 12,
-    minWidth: 75,
+    minWidth: 72,
     alignItems: "center",
   },
   ostatV: { fontFamily: fonts.displayBold, fontSize: 24, color: colors.dark },
@@ -1446,12 +1400,6 @@ const s = StyleSheet.create({
     marginBottom: 10,
     ...shadows.lg,
   },
-  capCtaGradient: { padding: 16, alignItems: "center" },
+  capCtaGrad: { padding: 16, alignItems: "center" },
   capCtaTxt: { fontFamily: fonts.displayBold, fontSize: 17, color: "white" },
-  capCtaSub: {
-    fontFamily: fonts.body,
-    fontSize: 11,
-    color: "rgba(255,255,255,0.8)",
-    marginTop: 2,
-  },
 });
