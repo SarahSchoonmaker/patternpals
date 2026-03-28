@@ -89,6 +89,7 @@ export const PALS = [
     emoji: "🐼",
     name: "Panda",
     xpReq: 0,
+    premium: false,
     story: "Your first friend! Always by your side.",
   },
   {
@@ -96,6 +97,7 @@ export const PALS = [
     emoji: "🦊",
     name: "Fox",
     xpReq: 80,
+    premium: true,
     story: "Clever and quick — loves the Speed mode!",
   },
   {
@@ -103,6 +105,7 @@ export const PALS = [
     emoji: "🐰",
     name: "Bunny",
     xpReq: 200,
+    premium: true,
     story: "Bouncy and cheerful — great at Happy!",
   },
   {
@@ -110,6 +113,7 @@ export const PALS = [
     emoji: "🐱",
     name: "Cat",
     xpReq: 400,
+    premium: true,
     story: "Cool and curious — perfect at patterns.",
   },
   {
@@ -117,6 +121,7 @@ export const PALS = [
     emoji: "🐻",
     name: "Bear",
     xpReq: 700,
+    premium: true,
     story: "Strong and brave — never gives up!",
   },
   {
@@ -124,6 +129,7 @@ export const PALS = [
     emoji: "🦉",
     name: "Owl",
     xpReq: 1100,
+    premium: true,
     story: "Wise and patient — master of Mirror mode.",
   },
   {
@@ -131,6 +137,7 @@ export const PALS = [
     emoji: "🦁",
     name: "Lion",
     xpReq: 1600,
+    premium: true,
     story: "Bold and fearless — the ultimate Brave pal.",
   },
   {
@@ -138,6 +145,7 @@ export const PALS = [
     emoji: "🐉",
     name: "Dragon",
     xpReq: 2500,
+    premium: true,
     story: "Rare and powerful — only the best unlock me!",
   },
   {
@@ -145,42 +153,102 @@ export const PALS = [
     emoji: "🦄",
     name: "Unicorn",
     xpReq: 4000,
+    premium: true,
     story: "Legendary! Only true Emotion Masters find me.",
   },
 ];
 
+// Free tier limits
+export const FREE_LIMITS = {
+  maxLevel: 10, // Free play stops at level 10
+  modes: ["classic"], // Free gets Classic mode only
+};
+
 export const STORY_LINES = [
   {
     pal: "panda",
-    text: "Oh no! I knocked over my friend's tower by accident. Can you echo how I feel?",
+    text: "I just scored a goal for the FIRST TIME EVER! The crowd cheered! How do I feel?",
+    answer: "excited",
+    hint: "Think about winning something amazing for the first time!",
+    wrongMsg: "Almost! Winning feels really exciting!",
   },
   {
     pal: "fox",
-    text: "I just scored a goal for the FIRST TIME EVER! Show me how I feel!",
+    text: "Oh no... I accidentally knocked over my friend's tower they worked SO hard on. How do I feel?",
+    answer: "sad",
+    hint: "When we hurt someone by accident, we feel...",
+    wrongMsg:
+      "Think about how it feels to accidentally hurt someone you care about.",
   },
   {
     pal: "bunny",
-    text: "A big dog walked past me today... I didn't know what to do. Show me my face!",
-  },
-  {
-    pal: "cat",
-    text: "My best friend just moved to another town. Help me express these feelings!",
+    text: "A big scary dog is running toward me and I don't know what to do! How do I feel?",
+    answer: "scared",
+    hint: "Something unexpected and big is coming! That feeling is...",
+    wrongMsg: "When something scary surprises us, we feel scared!",
   },
   {
     pal: "bear",
-    text: "We're going to the theme park on Saturday! I can barely sit still — show how I feel!",
+    text: "Someone took my favorite toy without asking me first. That was NOT okay! How do I feel?",
+    answer: "angry",
+    hint: "When someone does something unfair to us, we feel...",
+    wrongMsg: "When things aren't fair, it's normal to feel angry!",
   },
   {
     pal: "panda",
-    text: "Someone took my favorite toy without asking. Can you echo what I'm feeling?",
+    text: "It's the last day of school and I have to say goodbye to all my friends. How do I feel?",
+    answer: "sad",
+    hint: "Saying goodbye to people we love makes us feel...",
+    wrongMsg: "Saying goodbye to friends we love makes us feel sad.",
   },
   {
     pal: "owl",
-    text: "I have to sing on stage in front of EVERYONE tomorrow. Show my feelings!",
+    text: "I have to stand up and speak in front of the WHOLE class tomorrow. How do I feel?",
+    answer: "shy",
+    hint: "Being in front of lots of people makes some of us feel...",
+    wrongMsg: "Being watched by lots of people can make us feel shy!",
+  },
+  {
+    pal: "cat",
+    text: "We're going to the theme park on Saturday! I can't stop thinking about all the rides! How do I feel?",
+    answer: "excited",
+    hint: "When something amazing is about to happen, we feel...",
+    wrongMsg: "Something so fun coming up makes us feel excited!",
   },
   {
     pal: "fox",
-    text: "I got to stay up late and watch movies with my family! Show my excitement!",
+    text: "I got to stay up late and watch movies with my whole family. It was the best night ever! How do I feel?",
+    answer: "happy",
+    hint: "When everything is perfect and we're with the people we love, we feel...",
+    wrongMsg: "A perfect night with family makes us feel so happy!",
+  },
+  {
+    pal: "bear",
+    text: "I practiced and practiced my dance routine. Now it's time to perform. Everyone is watching... How do I feel?",
+    answer: "brave",
+    hint: "When we face something scary but do it anyway, that's called being...",
+    wrongMsg: "Doing something scary even when nervous is being brave!",
+  },
+  {
+    pal: "bunny",
+    text: "It's been a really long day. My eyes feel so heavy and I just want to curl up in bed. How do I feel?",
+    answer: "sleepy",
+    hint: "At the end of a long day when your eyes feel heavy, you feel...",
+    wrongMsg: "When you're tired at the end of the day, you feel sleepy!",
+  },
+  {
+    pal: "panda",
+    text: "My friend made a really funny face at lunch and I couldn't stop giggling! How do I feel?",
+    answer: "silly",
+    hint: "When something makes you giggle and you can't stop, you feel...",
+    wrongMsg: "Giggling and laughing makes us feel silly!",
+  },
+  {
+    pal: "owl",
+    text: "I just met a new kid at school. They seem really nice but I don't know what to say to them. How do I feel?",
+    answer: "shy",
+    hint: "Meeting someone new when you don't know what to say makes you feel...",
+    wrongMsg: "Meeting new people can make us feel shy at first!",
   },
 ];
 
