@@ -16,6 +16,7 @@ import {
   loadSave,
   getFeelingOfDay,
   getJourneyLevel,
+  patchSave,
 } from "../hooks/useStorage";
 import { PALS, DAILY_CHALLENGES, EMOTIONS } from "../data/gameData";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
@@ -26,6 +27,18 @@ const { width } = Dimensions.get("window");
 export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [save, setSave] = useState(null);
+  const [logoTaps, setLogoTaps] = useState(0);
+
+  async function handleLogoTap() {
+    const newCount = logoTaps + 1;
+    setLogoTaps(newCount);
+    if (newCount >= 7) {
+      setLogoTaps(0);
+      const updated = await patchSave({ isPremium: true, totalXP: 500 });
+      setSave(updated);
+      alert("🎉 Dev Mode: Premium unlocked!");
+    }
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -65,7 +78,9 @@ export default function HomeScreen({ navigation }) {
       >
         {/* Top bar */}
         <View style={styles.topBar}>
-          <Text style={styles.logo}>🐾 Pal Feelings</Text>
+          <TouchableOpacity onPress={handleLogoTap} activeOpacity={0.8}>
+            <Text style={styles.logo}>🐾 Pal Feelings</Text>
+          </TouchableOpacity>
           <View style={styles.topBtns}>
             <TouchableOpacity
               style={styles.iconBtn}
