@@ -28,22 +28,21 @@ export default function PalSelectScreen({ navigation }) {
     }, []),
   );
 
-  async function selectPal(pal) {
-    // If pal needs premium and user doesn't have it — show paywall
+  if (!save) return null;
+
+  function selectPal(pal) {
+    // Premium pal and no premium — go to paywall
     if (pal.premium && !save.isPremium) {
       navigation.navigate("Paywall", { triggerPal: pal });
       return;
     }
-    // If pal needs XP and user doesn't have enough
+    // Not enough XP
     if (save.totalXP < pal.xpReq) {
-      // Can't select yet — show XP needed
       return;
     }
-    const updated = await patchSave({ selPal: pal.id });
-    setSave(updated);
+    // Select it
+    patchSave({ selPal: pal.id }).then(setSave);
   }
-
-  if (!save) return null;
 
   return (
     <View style={{ flex: 1 }}>
@@ -64,11 +63,11 @@ export default function PalSelectScreen({ navigation }) {
 
           <Text style={s.sub}>
             {save.isPremium
-              ? `All pals unlocked! Total XP: ${save.totalXP}`
-              : `Unlock all 9 pals for $7.99 · Total XP: ${save.totalXP}`}
+              ? `All pals unlocked! XP: ${save.totalXP}`
+              : `Unlock all 9 pals for $7.99 · XP: ${save.totalXP}`}
           </Text>
 
-          {/* Premium banner if not purchased */}
+          {/* Premium banner */}
           {!save.isPremium && (
             <TouchableOpacity
               style={s.premiumBanner}
@@ -95,13 +94,13 @@ export default function PalSelectScreen({ navigation }) {
             </TouchableOpacity>
           )}
 
+          {/* Pals grid */}
           <View style={s.grid}>
             {PALS.map((pal) => {
-              const hasXP = save.totalXP >= pal.xpReq;
-              const hasPremium = !pal.premium || save.isPremium;
-              const isSelectable = hasXP && hasPremium;
               const isSelected = save.selPal === pal.id;
               const needsPremium = pal.premium && !save.isPremium;
+              const hasXP = save.totalXP >= pal.xpReq;
+              const isLocked = needsPremium || !hasXP;
 
               return (
                 <TouchableOpacity
@@ -109,33 +108,23 @@ export default function PalSelectScreen({ navigation }) {
                   style={[
                     s.palCard,
                     isSelected && s.palCardSel,
-                    !isSelectable && s.palCardLocked,
+                    isLocked && s.palCardLocked,
                   ]}
                   onPress={() => selectPal(pal)}
                   activeOpacity={0.85}
                 >
-                  {/* Premium shimmer overlay */}
-                  {needsPremium && (
-                    <View style={s.premiumOverlay}>
-                      <Text style={s.premiumOverlayIcon}>👑</Text>
-                    </View>
-                  )}
-
                   <Text style={s.palEmoji}>{pal.emoji}</Text>
                   <Text style={s.palName}>{pal.name}</Text>
 
                   {isSelected && <Text style={s.selectedTick}>✓</Text>}
-
                   {needsPremium && !isSelected && (
                     <View style={s.lockBadge}>
                       <Text style={s.lockBadgeTxt}>PREMIUM</Text>
                     </View>
                   )}
-
                   {!needsPremium && !isSelected && !hasXP && (
                     <Text style={s.xpReq}>{pal.xpReq} XP</Text>
                   )}
-
                   {!needsPremium && !isSelected && hasXP && (
                     <Text style={s.unlocked}>Unlocked ✓</Text>
                   )}
@@ -144,7 +133,6 @@ export default function PalSelectScreen({ navigation }) {
             })}
           </View>
 
-          {/* Restore purchase link */}
           <TouchableOpacity
             onPress={() => navigation.navigate("Paywall", {})}
             style={s.restoreBtn}
@@ -216,8 +204,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.1)",
-    position: "relative",
-    overflow: "hidden",
     ...shadows.sm,
   },
   palCardSel: {
@@ -225,21 +211,6 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(255,217,61,0.1)",
   },
   palCardLocked: { opacity: 0.6 },
-
-  premiumOverlay: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,217,61,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-    margin: 4,
-  },
-  premiumOverlayIcon: { fontSize: 12 },
-
   palEmoji: { fontSize: 38, marginBottom: 6 },
   palName: {
     fontFamily: fonts.display,
@@ -247,7 +218,6 @@ const s = StyleSheet.create({
     color: "white",
     fontWeight: "800",
   },
-
   selectedTick: {
     fontFamily: fonts.display,
     fontSize: 13,
