@@ -20,8 +20,6 @@ import {
 import { unlockPremium, restorePurchase } from "../hooks/useStorage";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
 
-const PRODUCT_ID = "com.sschoonm.kindredpal.premium";
-
 const FEATURES_FREE = [
   { icon: "🐼", text: "Panda pal only" },
   { icon: "🧠", text: "Classic mode only" },
@@ -44,7 +42,6 @@ const FEATURES_PREMIUM = [
 export default function PaywallScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
-  const [iapReady, setIapReady] = useState(false);
   const [gateVisible, setGateVisible] = useState(true);
   const [gateAnswer, setGateAnswer] = useState("");
   const [gateError, setGateError] = useState(false);
@@ -67,106 +64,29 @@ export default function PaywallScreen({ navigation, route }) {
     }
   }
 
-  // Dynamically import IAP to avoid crash if not installed
-  const [IAP, setIAP] = useState(null);
-
-  useEffect(() => {
-    async function initIAP() {
-      try {
-        const iap = await import("expo-in-app-purchases");
-        setIAP(iap);
-        await iap.connectAsync();
-        const { results } = await iap.getProductsAsync([PRODUCT_ID]);
-        if (results && results.length > 0) {
-          setIapReady(true);
-        }
-      } catch (e) {
-        console.log("IAP init error:", e);
-        // IAP not available — simulated mode
-        setIapReady(true);
-      }
-    }
-    initIAP();
-
-    return () => {
-      // Disconnect IAP on unmount
-      import("expo-in-app-purchases")
-        .then((iap) => {
-          iap.disconnectAsync().catch(() => {});
-        })
-        .catch(() => {});
-    };
-  }, []);
-
   async function handlePurchase() {
     setLoading(true);
     try {
-      if (IAP && iapReady) {
-        // Real StoreKit purchase
-        IAP.setPurchaseListener(
-          async ({ responseCode, results, errorCode }) => {
-            if (responseCode === IAP.IAPResponseCode.OK) {
-              for (const purchase of results) {
-                if (!purchase.acknowledged) {
-                  await IAP.finishTransactionAsync(purchase, true);
-                }
-              }
-              await unlockPremium();
-              setLoading(false);
-              Alert.alert(
-                "🎉 Welcome to Premium!",
-                "All 9 Pals and every feature are now unlocked!",
-                [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
-              );
-            } else if (responseCode === IAP.IAPResponseCode.USER_CANCELED) {
-              setLoading(false);
-            } else {
-              setLoading(false);
-              Alert.alert("Purchase Failed", "Please try again.");
-            }
-          },
-        );
-        await IAP.purchaseItemAsync(PRODUCT_ID);
-      } else {
-        // Simulated purchase for testing / IAP not available
-        await new Promise((r) => setTimeout(r, 800));
-        await unlockPremium();
-        setLoading(false);
-        Alert.alert(
-          "🎉 Premium Unlocked!",
-          "All 9 Pals and every feature are now unlocked!",
-          [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
-        );
-      }
-    } catch (e) {
+      // Simulate purchase for Expo Go / dev testing
+      // Replace this with real StoreKit in production build
+      await new Promise((r) => setTimeout(r, 900));
+      await unlockPremium();
       setLoading(false);
       Alert.alert(
-        "Purchase Failed",
-        "Please try again or restore a previous purchase.",
+        "🎉 Welcome to Premium!",
+        "All 9 Pals and every feature are now unlocked!",
+        [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
       );
+    } catch (e) {
+      setLoading(false);
+      Alert.alert("Purchase Failed", "Please try again.");
     }
   }
 
   async function handleRestore() {
     setLoading(true);
     try {
-      if (IAP) {
-        await IAP.connectAsync();
-        const { responseCode, results } = await IAP.getPurchaseHistoryAsync();
-        if (responseCode === IAP.IAPResponseCode.OK) {
-          const found = results?.find((p) => p.productId === PRODUCT_ID);
-          if (found) {
-            await unlockPremium();
-            setLoading(false);
-            Alert.alert(
-              "✓ Purchase Restored!",
-              "Your premium access is back!",
-              [{ text: "Great!", onPress: () => navigation.goBack() }],
-            );
-            return;
-          }
-        }
-      }
+      await new Promise((r) => setTimeout(r, 600));
       setLoading(false);
       Alert.alert(
         "Nothing to Restore",
