@@ -11,11 +11,13 @@
       "resizeMode": "contain",
       "backgroundColor": "#1e3a6e"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.sschoonm.kindredpal",
-      "buildNumber": "1",
+      "buildNumber": "23",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -27,7 +29,9 @@
       },
       "package": "com.sschoonm.kindredpal",
       "versionCode": 1,
-      "permissions": ["android.permission.VIBRATE"]
+      "permissions": [
+        "android.permission.VIBRATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

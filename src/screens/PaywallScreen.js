@@ -1,5 +1,5 @@
 // src/screens/PaywallScreen.js
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,9 +8,9 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Platform,
   TextInput,
   KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -41,23 +41,26 @@ const FEATURES_PREMIUM = [
 
 export default function PaywallScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const [loading, setLoading] = useState(false);
+  const { triggerPal } = route?.params || {};
+
+  // ── Parental gate state ───────────────────────────────────
   const [gateVisible, setGateVisible] = useState(true);
   const [gateAnswer, setGateAnswer] = useState("");
   const [gateError, setGateError] = useState(false);
-  const { triggerPal } = route.params || {};
-
-  // Parental gate math question — changes each time
   const [gateQ] = useState(() => {
-    const a = Math.floor(Math.random() * 9) + 2;
-    const b = Math.floor(Math.random() * 9) + 2;
+    const a = Math.floor(Math.random() * 8) + 2;
+    const b = Math.floor(Math.random() * 8) + 2;
     return { a, b, answer: String(a + b) };
   });
+
+  // ── Purchase state ────────────────────────────────────────
+  const [loading, setLoading] = useState(false);
 
   function checkGate() {
     if (gateAnswer.trim() === gateQ.answer) {
       setGateVisible(false);
       setGateError(false);
+      setGateAnswer("");
     } else {
       setGateError(true);
       setGateAnswer("");
@@ -67,8 +70,6 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      // Simulate purchase for Expo Go / dev testing
-      // Replace this with real StoreKit in production build
       await new Promise((r) => setTimeout(r, 900));
       await unlockPremium();
       setLoading(false);
@@ -86,19 +87,21 @@ export default function PaywallScreen({ navigation, route }) {
   async function handleRestore() {
     setLoading(true);
     try {
-      await new Promise((r) => setTimeout(r, 600));
+      await restorePurchase();
+      setLoading(false);
+      Alert.alert("✓ Purchase Restored!", "Your premium access is back!", [
+        { text: "Great!", onPress: () => navigation.goBack() },
+      ]);
+    } catch (e) {
       setLoading(false);
       Alert.alert(
         "Nothing to Restore",
         "No previous purchase found for this Apple ID.",
       );
-    } catch (e) {
-      setLoading(false);
-      Alert.alert("Restore Failed", "Please try again.");
     }
   }
 
-  // ── Parental gate ─────────────────────────────────────────
+  // ── PARENTAL GATE SCREEN ──────────────────────────────────
   if (gateVisible) {
     return (
       <View style={s.root}>
@@ -111,15 +114,15 @@ export default function PaywallScreen({ navigation, route }) {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <SafeAreaView
-            style={{ flex: 1, justifyContent: "center" }}
+            style={s.gateSafe}
             edges={["top", "left", "right", "bottom"]}
           >
             <View style={s.gateCard}>
               <Text style={s.gateIcon}>👨‍👩‍👧</Text>
               <Text style={s.gateTitle}>Parent Check</Text>
               <Text style={s.gateSub}>
-                This purchase requires a parent or guardian. Please answer this
-                question to continue:
+                This purchase requires a parent or guardian. Please solve this
+                to continue:
               </Text>
 
               <View style={s.gateQuestion}>
@@ -136,16 +139,16 @@ export default function PaywallScreen({ navigation, route }) {
                   setGateError(false);
                 }}
                 keyboardType="number-pad"
-                placeholder="Enter answer"
+                placeholder="Type your answer"
                 placeholderTextColor="rgba(255,255,255,0.3)"
                 maxLength={3}
                 autoFocus
+                returnKeyType="done"
+                onSubmitEditing={checkGate}
               />
 
               {gateError && (
-                <Text style={s.gateErrorMsg}>
-                  That's not right — please try again
-                </Text>
+                <Text style={s.gateErrorMsg}>That's not right — try again</Text>
               )}
 
               <TouchableOpacity
@@ -158,9 +161,9 @@ export default function PaywallScreen({ navigation, route }) {
 
               <TouchableOpacity
                 onPress={() => navigation.goBack()}
-                style={{ marginTop: 16, alignItems: "center" }}
+                style={{ marginTop: 20, alignItems: "center" }}
               >
-                <Text style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
+                <Text style={{ color: "rgba(255,255,255,0.35)", fontSize: 13 }}>
                   Cancel
                 </Text>
               </TouchableOpacity>
@@ -171,6 +174,7 @@ export default function PaywallScreen({ navigation, route }) {
     );
   }
 
+  // ── PAYWALL SCREEN ────────────────────────────────────────
   return (
     <View style={s.root}>
       <LinearGradient
@@ -183,7 +187,7 @@ export default function PaywallScreen({ navigation, route }) {
           contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Close button */}
+          {/* Close */}
           <TouchableOpacity
             style={s.closeBtn}
             onPress={() => navigation.goBack()}
@@ -201,10 +205,10 @@ export default function PaywallScreen({ navigation, route }) {
             </Text>
           </View>
 
-          {/* Triggered pal preview */}
+          {/* Triggered pal */}
           {triggerPal && (
             <View style={s.palPreview}>
-              <Text style={s.palPreviewEmo}>{triggerPal.emoji}</Text>
+              <Text style={{ fontSize: 44 }}>{triggerPal.emoji}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={s.palPreviewName}>
                   {triggerPal.name} wants to play!
@@ -226,7 +230,7 @@ export default function PaywallScreen({ navigation, route }) {
             )}
           </View>
 
-          {/* Feature compare */}
+          {/* Compare columns */}
           <View style={s.compareRow}>
             <View style={[s.compareCol, s.freeCol]}>
               <Text style={s.colTitle}>Free</Text>
@@ -237,7 +241,6 @@ export default function PaywallScreen({ navigation, route }) {
                 </View>
               ))}
             </View>
-
             <LinearGradient
               colors={["#1a2a50", "#2a3a70"]}
               style={[s.compareCol, s.premiumCol]}
@@ -263,7 +266,7 @@ export default function PaywallScreen({ navigation, route }) {
             <Text style={s.priceFamily}>✓ Family Sharing included</Text>
           </View>
 
-          {/* Purchase button */}
+          {/* Buy button */}
           <TouchableOpacity
             style={s.ctaBtn}
             onPress={handlePurchase}
@@ -308,6 +311,77 @@ export default function PaywallScreen({ navigation, route }) {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
+
+  // ── Gate styles ─────────────────────────────────────────
+  gateSafe: { flex: 1, justifyContent: "center", padding: spacing.lg },
+  gateCard: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  gateIcon: { fontSize: 56, marginBottom: 12 },
+  gateTitle: {
+    fontFamily: fonts.displayBold,
+    fontSize: 26,
+    color: "white",
+    marginBottom: 8,
+  },
+  gateSub: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: "rgba(255,255,255,0.6)",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  gateQuestion: {
+    backgroundColor: "rgba(255,217,61,0.15)",
+    borderRadius: radius.lg,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,217,61,0.4)",
+  },
+  gateQText: {
+    fontFamily: fonts.displayBold,
+    fontSize: 32,
+    color: "#FFD93D",
+    textAlign: "center",
+  },
+  gateInput: {
+    width: "100%",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
+    borderRadius: radius.lg,
+    padding: 14,
+    fontFamily: fonts.displayBold,
+    fontSize: 28,
+    color: "white",
+    textAlign: "center",
+    marginBottom: 10,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  gateInputError: { borderColor: "#FF6B6B" },
+  gateErrorMsg: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: "#FF9A9A",
+    marginBottom: 10,
+  },
+  gateBtn: {
+    width: "100%",
+    backgroundColor: "#4D96FF",
+    borderRadius: radius.lg,
+    padding: 16,
+    alignItems: "center",
+  },
+  gateBtnTxt: { fontFamily: fonts.displayBold, fontSize: 18, color: "white" },
+
+  // ── Paywall styles ──────────────────────────────────────
   scroll: { padding: spacing.lg, paddingBottom: 50 },
 
   closeBtn: {
@@ -351,7 +425,6 @@ const s = StyleSheet.create({
     gap: 12,
     marginBottom: spacing.md,
   },
-  palPreviewEmo: { fontSize: 44 },
   palPreviewName: {
     fontFamily: fonts.display,
     fontSize: 16,
@@ -497,72 +570,4 @@ const s = StyleSheet.create({
     textAlign: "center",
     lineHeight: 16,
   },
-
-  gateCard: {
-    margin: spacing.lg,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: radius.xl,
-    padding: spacing.xl,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
-  },
-  gateIcon: { fontSize: 56, marginBottom: 12 },
-  gateTitle: {
-    fontFamily: fonts.displayBold,
-    fontSize: 26,
-    color: "white",
-    marginBottom: 8,
-  },
-  gateSub: {
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: "rgba(255,255,255,0.6)",
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  gateQuestion: {
-    backgroundColor: "rgba(255,217,61,0.15)",
-    borderRadius: radius.lg,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,217,61,0.4)",
-  },
-  gateQText: {
-    fontFamily: fonts.displayBold,
-    fontSize: 32,
-    color: "#FFD93D",
-    textAlign: "center",
-  },
-  gateInput: {
-    width: "100%",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.3)",
-    borderRadius: radius.lg,
-    padding: 16,
-    fontFamily: fonts.displayBold,
-    fontSize: 28,
-    color: "white",
-    textAlign: "center",
-    marginBottom: 12,
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  gateInputError: { borderColor: "#FF6B6B" },
-  gateErrorMsg: {
-    fontFamily: fonts.body,
-    fontSize: 13,
-    color: "#FF9A9A",
-    marginBottom: 12,
-  },
-  gateBtn: {
-    width: "100%",
-    backgroundColor: "#4D96FF",
-    borderRadius: radius.lg,
-    padding: 16,
-    alignItems: "center",
-  },
-  gateBtnTxt: { fontFamily: fonts.displayBold, fontSize: 18, color: "white" },
 });
