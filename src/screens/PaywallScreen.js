@@ -9,6 +9,8 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  TextInput,
+  KeyboardAvoidingView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -43,7 +45,27 @@ export default function PaywallScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [iapReady, setIapReady] = useState(false);
+  const [gateVisible, setGateVisible] = useState(true);
+  const [gateAnswer, setGateAnswer] = useState("");
+  const [gateError, setGateError] = useState(false);
   const { triggerPal } = route.params || {};
+
+  // Parental gate math question — changes each time
+  const [gateQ] = useState(() => {
+    const a = Math.floor(Math.random() * 9) + 2;
+    const b = Math.floor(Math.random() * 9) + 2;
+    return { a, b, answer: String(a + b) };
+  });
+
+  function checkGate() {
+    if (gateAnswer.trim() === gateQ.answer) {
+      setGateVisible(false);
+      setGateError(false);
+    } else {
+      setGateError(true);
+      setGateAnswer("");
+    }
+  }
 
   // Dynamically import IAP to avoid crash if not installed
   const [IAP, setIAP] = useState(null);
@@ -154,6 +176,79 @@ export default function PaywallScreen({ navigation, route }) {
       setLoading(false);
       Alert.alert("Restore Failed", "Please try again.");
     }
+  }
+
+  // ── Parental gate ─────────────────────────────────────────
+  if (gateVisible) {
+    return (
+      <View style={s.root}>
+        <LinearGradient
+          colors={["#0f1f43", "#1f3a6f", "#0b1a2f"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <SafeAreaView
+            style={{ flex: 1, justifyContent: "center" }}
+            edges={["top", "left", "right", "bottom"]}
+          >
+            <View style={s.gateCard}>
+              <Text style={s.gateIcon}>👨‍👩‍👧</Text>
+              <Text style={s.gateTitle}>Parent Check</Text>
+              <Text style={s.gateSub}>
+                This purchase requires a parent or guardian. Please answer this
+                question to continue:
+              </Text>
+
+              <View style={s.gateQuestion}>
+                <Text style={s.gateQText}>
+                  What is {gateQ.a} + {gateQ.b}?
+                </Text>
+              </View>
+
+              <TextInput
+                style={[s.gateInput, gateError && s.gateInputError]}
+                value={gateAnswer}
+                onChangeText={(t) => {
+                  setGateAnswer(t.replace(/[^0-9]/g, ""));
+                  setGateError(false);
+                }}
+                keyboardType="number-pad"
+                placeholder="Enter answer"
+                placeholderTextColor="rgba(255,255,255,0.3)"
+                maxLength={3}
+                autoFocus
+              />
+
+              {gateError && (
+                <Text style={s.gateErrorMsg}>
+                  That's not right — please try again
+                </Text>
+              )}
+
+              <TouchableOpacity
+                style={s.gateBtn}
+                onPress={checkGate}
+                activeOpacity={0.88}
+              >
+                <Text style={s.gateBtnTxt}>Continue →</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                style={{ marginTop: 16, alignItems: "center" }}
+              >
+                <Text style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </View>
+    );
   }
 
   return (
@@ -482,4 +577,72 @@ const s = StyleSheet.create({
     textAlign: "center",
     lineHeight: 16,
   },
+
+  gateCard: {
+    margin: spacing.lg,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  gateIcon: { fontSize: 56, marginBottom: 12 },
+  gateTitle: {
+    fontFamily: fonts.displayBold,
+    fontSize: 26,
+    color: "white",
+    marginBottom: 8,
+  },
+  gateSub: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: "rgba(255,255,255,0.6)",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  gateQuestion: {
+    backgroundColor: "rgba(255,217,61,0.15)",
+    borderRadius: radius.lg,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,217,61,0.4)",
+  },
+  gateQText: {
+    fontFamily: fonts.displayBold,
+    fontSize: 32,
+    color: "#FFD93D",
+    textAlign: "center",
+  },
+  gateInput: {
+    width: "100%",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
+    borderRadius: radius.lg,
+    padding: 16,
+    fontFamily: fonts.displayBold,
+    fontSize: 28,
+    color: "white",
+    textAlign: "center",
+    marginBottom: 12,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  gateInputError: { borderColor: "#FF6B6B" },
+  gateErrorMsg: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: "#FF9A9A",
+    marginBottom: 12,
+  },
+  gateBtn: {
+    width: "100%",
+    backgroundColor: "#4D96FF",
+    borderRadius: radius.lg,
+    padding: 16,
+    alignItems: "center",
+  },
+  gateBtnTxt: { fontFamily: fonts.displayBold, fontSize: 18, color: "white" },
 });
