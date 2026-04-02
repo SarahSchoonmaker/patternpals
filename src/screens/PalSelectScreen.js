@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -32,12 +31,6 @@ export default function PalSelectScreen({ navigation }) {
   if (!save) return null;
 
   function selectPal(pal) {
-    // Debug — remove after fixing
-    Alert.alert(
-      "Debug",
-      `Pal: ${pal.name}\npremium flag: ${pal.premium}\nisPremium: ${save.isPremium}\nWill show paywall: ${pal.premium === true && !save.isPremium}`,
-    );
-
     if (pal.premium === true && !save.isPremium) {
       navigation.navigate("Paywall", { triggerPal: pal });
       return;
