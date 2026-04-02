@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -31,16 +32,19 @@ export default function PalSelectScreen({ navigation }) {
   if (!save) return null;
 
   function selectPal(pal) {
-    // Premium pal and no premium — go to paywall
-    if (pal.premium && !save.isPremium) {
+    // Debug — remove after fixing
+    Alert.alert(
+      "Debug",
+      `Pal: ${pal.name}\npremium flag: ${pal.premium}\nisPremium: ${save.isPremium}\nWill show paywall: ${pal.premium === true && !save.isPremium}`,
+    );
+
+    if (pal.premium === true && !save.isPremium) {
       navigation.navigate("Paywall", { triggerPal: pal });
       return;
     }
-    // Not enough XP
     if (save.totalXP < pal.xpReq) {
       return;
     }
-    // Select it
     patchSave({ selPal: pal.id }).then(setSave);
   }
 
@@ -67,7 +71,6 @@ export default function PalSelectScreen({ navigation }) {
               : `Unlock all 9 pals for $7.99 · XP: ${save.totalXP}`}
           </Text>
 
-          {/* Premium banner */}
           {!save.isPremium && (
             <TouchableOpacity
               style={s.premiumBanner}
@@ -94,11 +97,10 @@ export default function PalSelectScreen({ navigation }) {
             </TouchableOpacity>
           )}
 
-          {/* Pals grid */}
           <View style={s.grid}>
             {PALS.map((pal) => {
               const isSelected = save.selPal === pal.id;
-              const needsPremium = pal.premium && !save.isPremium;
+              const needsPremium = pal.premium === true && !save.isPremium;
               const hasXP = save.totalXP >= pal.xpReq;
               const isLocked = needsPremium || !hasXP;
 
@@ -115,7 +117,6 @@ export default function PalSelectScreen({ navigation }) {
                 >
                   <Text style={s.palEmoji}>{pal.emoji}</Text>
                   <Text style={s.palName}>{pal.name}</Text>
-
                   {isSelected && <Text style={s.selectedTick}>✓</Text>}
                   {needsPremium && !isSelected && (
                     <View style={s.lockBadge}>
@@ -251,7 +252,6 @@ const s = StyleSheet.create({
     color: "#6BCB77",
     marginTop: 3,
   },
-
   restoreBtn: { alignItems: "center", paddingVertical: spacing.sm },
   restoreTxt: {
     fontFamily: fonts.body,
