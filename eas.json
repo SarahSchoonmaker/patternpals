@@ -26,6 +26,7 @@
   },
   "submit": {
     "production": {
+      "autoIncrement": true,
       "ios": {
         "appleId": "srschoonmaker@gmail.com",
         "ascAppId": "6760982189",
