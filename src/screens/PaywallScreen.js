@@ -1,5 +1,5 @@
 // src/screens/PaywallScreen.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -17,8 +17,10 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { unlockPremium, restorePurchase } from "../hooks/useStorage";
+import { unlockPremium } from "../hooks/useStorage";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
+
+const PRODUCT_ID = "com.sschoonm.kindredpal.premium";
 
 const FEATURES_FREE = [
   { icon: "🐼", text: "Panda pal only" },
@@ -43,7 +45,7 @@ export default function PaywallScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { triggerPal } = route?.params || {};
 
-  // ── Parental gate state ───────────────────────────────────
+  // Parental gate
   const [gateVisible, setGateVisible] = useState(true);
   const [gateAnswer, setGateAnswer] = useState("");
   const [gateError, setGateError] = useState(false);
@@ -53,8 +55,27 @@ export default function PaywallScreen({ navigation, route }) {
     return { a, b, answer: String(a + b) };
   });
 
-  // ── Purchase state ────────────────────────────────────────
+  // Purchase
   const [loading, setLoading] = useState(false);
+  const [Purchases, setPurchases] = useState(null);
+
+  useEffect(() => {
+    // Dynamically load RevenueCat to avoid crash if not installed
+    import("react-native-purchases")
+      .then((mod) => {
+        const RC = mod.default || mod;
+        try {
+          // Replace YOUR_REVENUECAT_API_KEY with your actual key from app.revenuecat.com
+          RC.configure({ apiKey: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY });
+          setPurchases(RC);
+        } catch (e) {
+          console.log("RevenueCat config error:", e);
+        }
+      })
+      .catch(() => {
+        console.log("RevenueCat not installed — using simulation");
+      });
+  }, []);
 
   function checkGate() {
     if (gateAnswer.trim() === gateQ.answer) {
@@ -70,38 +91,77 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      await new Promise((r) => setTimeout(r, 900));
-      await unlockPremium();
-      setLoading(false);
-      Alert.alert(
-        "🎉 Welcome to Premium!",
-        "All 9 Pals and every feature are now unlocked!",
-        [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
-      );
+      if (Purchases) {
+        // Real RevenueCat purchase
+        const offerings = await Purchases.getOfferings();
+        const pkg = offerings?.current?.availablePackages?.[0];
+        if (pkg) {
+          const { customerInfo } = await Purchases.purchasePackage(pkg);
+          const isPremium = customerInfo.entitlements.active["premium"];
+          if (isPremium) {
+            await unlockPremium();
+            setLoading(false);
+            Alert.alert(
+              "🎉 Welcome to Premium!",
+              "All 9 Pals and every feature are now unlocked!",
+              [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
+            );
+            return;
+          }
+        }
+        setLoading(false);
+        Alert.alert("Purchase Failed", "Please try again.");
+      } else {
+        // Fallback simulation (dev only)
+        await new Promise((r) => setTimeout(r, 900));
+        await unlockPremium();
+        setLoading(false);
+        Alert.alert(
+          "🎉 Welcome to Premium!",
+          "All 9 Pals and every feature are now unlocked!",
+          [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
+        );
+      }
     } catch (e) {
       setLoading(false);
-      Alert.alert("Purchase Failed", "Please try again.");
+      if (e?.code === "PURCHASE_CANCELLED") {
+        // User cancelled — no error needed
+      } else {
+        Alert.alert(
+          "Purchase Failed",
+          "Please try again or restore a previous purchase.",
+        );
+      }
     }
   }
 
   async function handleRestore() {
     setLoading(true);
     try {
-      await restorePurchase();
-      setLoading(false);
-      Alert.alert("✓ Purchase Restored!", "Your premium access is back!", [
-        { text: "Great!", onPress: () => navigation.goBack() },
-      ]);
-    } catch (e) {
+      if (Purchases) {
+        const customerInfo = await Purchases.restorePurchases();
+        const isPremium = customerInfo.entitlements.active["premium"];
+        if (isPremium) {
+          await unlockPremium();
+          setLoading(false);
+          Alert.alert("✓ Purchase Restored!", "Your premium access is back!", [
+            { text: "Great!", onPress: () => navigation.goBack() },
+          ]);
+          return;
+        }
+      }
       setLoading(false);
       Alert.alert(
         "Nothing to Restore",
         "No previous purchase found for this Apple ID.",
       );
+    } catch (e) {
+      setLoading(false);
+      Alert.alert("Restore Failed", "Please try again.");
     }
   }
 
-  // ── PARENTAL GATE SCREEN ──────────────────────────────────
+  // ── PARENTAL GATE ─────────────────────────────────────────
   if (gateVisible) {
     return (
       <View style={s.root}>
@@ -121,16 +181,14 @@ export default function PaywallScreen({ navigation, route }) {
               <Text style={s.gateIcon}>👨‍👩‍👧</Text>
               <Text style={s.gateTitle}>Parent Check</Text>
               <Text style={s.gateSub}>
-                This purchase requires a parent or guardian. Please solve this
-                to continue:
+                This purchase requires a parent or guardian.{"\n"}
+                Please solve this to continue:
               </Text>
-
               <View style={s.gateQuestion}>
                 <Text style={s.gateQText}>
                   What is {gateQ.a} + {gateQ.b}?
                 </Text>
               </View>
-
               <TextInput
                 style={[s.gateInput, gateError && s.gateInputError]}
                 value={gateAnswer}
@@ -146,11 +204,9 @@ export default function PaywallScreen({ navigation, route }) {
                 returnKeyType="done"
                 onSubmitEditing={checkGate}
               />
-
               {gateError && (
                 <Text style={s.gateErrorMsg}>That's not right — try again</Text>
               )}
-
               <TouchableOpacity
                 style={s.gateBtn}
                 onPress={checkGate}
@@ -158,7 +214,6 @@ export default function PaywallScreen({ navigation, route }) {
               >
                 <Text style={s.gateBtnTxt}>Continue →</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 onPress={() => navigation.goBack()}
                 style={{ marginTop: 20, alignItems: "center" }}
@@ -174,20 +229,18 @@ export default function PaywallScreen({ navigation, route }) {
     );
   }
 
-  // ── PAYWALL SCREEN ────────────────────────────────────────
+  // ── PAYWALL ───────────────────────────────────────────────
   return (
     <View style={s.root}>
       <LinearGradient
         colors={["#0f1f43", "#1f3a6f", "#0b1a2f"]}
         style={StyleSheet.absoluteFill}
       />
-
       <SafeAreaView style={{ flex: 1 }} edges={["left", "right", "bottom"]}>
         <ScrollView
           contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Close */}
           <TouchableOpacity
             style={s.closeBtn}
             onPress={() => navigation.goBack()}
@@ -196,7 +249,6 @@ export default function PaywallScreen({ navigation, route }) {
             <Text style={s.closeTxt}>✕</Text>
           </TouchableOpacity>
 
-          {/* Header */}
           <View style={s.header}>
             <Text style={s.crown}>👑</Text>
             <Text style={s.heroTitle}>Unlock All Pals</Text>
@@ -205,7 +257,6 @@ export default function PaywallScreen({ navigation, route }) {
             </Text>
           </View>
 
-          {/* Triggered pal */}
           {triggerPal && (
             <View style={s.palPreview}>
               <Text style={{ fontSize: 44 }}>{triggerPal.emoji}</Text>
@@ -218,7 +269,6 @@ export default function PaywallScreen({ navigation, route }) {
             </View>
           )}
 
-          {/* Pal parade */}
           <View style={s.palRow}>
             {["🐼", "🦊", "🐰", "🐱", "🐻", "🦉", "🦁", "🐉", "🦄"].map(
               (e, i) => (
@@ -230,7 +280,6 @@ export default function PaywallScreen({ navigation, route }) {
             )}
           </View>
 
-          {/* Compare columns */}
           <View style={s.compareRow}>
             <View style={[s.compareCol, s.freeCol]}>
               <Text style={s.colTitle}>Free</Text>
@@ -259,14 +308,12 @@ export default function PaywallScreen({ navigation, route }) {
             </LinearGradient>
           </View>
 
-          {/* Price */}
           <View style={s.priceBlock}>
             <Text style={s.priceAmount}>$7.99</Text>
             <Text style={s.priceDesc}>One-time purchase · No subscription</Text>
             <Text style={s.priceFamily}>✓ Family Sharing included</Text>
           </View>
 
-          {/* Buy button */}
           <TouchableOpacity
             style={s.ctaBtn}
             onPress={handlePurchase}
@@ -290,7 +337,6 @@ export default function PaywallScreen({ navigation, route }) {
             </LinearGradient>
           </TouchableOpacity>
 
-          {/* Restore */}
           <TouchableOpacity
             onPress={handleRestore}
             style={s.restoreBtn}
@@ -312,7 +358,6 @@ export default function PaywallScreen({ navigation, route }) {
 const s = StyleSheet.create({
   root: { flex: 1 },
 
-  // ── Gate styles ─────────────────────────────────────────
   gateSafe: { flex: 1, justifyContent: "center", padding: spacing.lg },
   gateCard: {
     backgroundColor: "rgba(255,255,255,0.08)",
@@ -381,9 +426,7 @@ const s = StyleSheet.create({
   },
   gateBtnTxt: { fontFamily: fonts.displayBold, fontSize: 18, color: "white" },
 
-  // ── Paywall styles ──────────────────────────────────────
   scroll: { padding: spacing.lg, paddingBottom: 50 },
-
   closeBtn: {
     alignSelf: "flex-end",
     width: 36,
@@ -399,7 +442,6 @@ const s = StyleSheet.create({
     fontSize: 16,
     color: "rgba(255,255,255,0.7)",
   },
-
   header: { alignItems: "center", marginBottom: spacing.lg },
   crown: { fontSize: 60, marginBottom: 8 },
   heroTitle: {
@@ -415,7 +457,6 @@ const s = StyleSheet.create({
     color: "rgba(255,255,255,0.6)",
     textAlign: "center",
   },
-
   palPreview: {
     backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: radius.lg,
@@ -438,7 +479,6 @@ const s = StyleSheet.create({
     color: "rgba(255,255,255,0.65)",
     lineHeight: 18,
   },
-
   palRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -468,7 +508,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
-
   compareRow: { flexDirection: "row", gap: 10, marginBottom: spacing.lg },
   compareCol: { flex: 1, borderRadius: radius.lg, padding: spacing.md },
   freeCol: {
@@ -513,7 +552,6 @@ const s = StyleSheet.create({
     flex: 1,
     lineHeight: 17,
   },
-
   priceBlock: {
     backgroundColor: "rgba(255,255,255,0.06)",
     borderRadius: radius.lg,
@@ -540,7 +578,6 @@ const s = StyleSheet.create({
     color: "#6BCB77",
     marginTop: 6,
   },
-
   ctaBtn: {
     borderRadius: radius.xl,
     overflow: "hidden",
@@ -555,14 +592,12 @@ const s = StyleSheet.create({
     color: "rgba(255,255,255,0.8)",
     marginTop: 3,
   },
-
   restoreBtn: { alignItems: "center", marginBottom: spacing.md, padding: 10 },
   restoreTxt: {
     fontFamily: fonts.body,
     fontSize: 13,
     color: "rgba(255,255,255,0.4)",
   },
-
   legal: {
     fontFamily: fonts.bodyReg,
     fontSize: 10,
