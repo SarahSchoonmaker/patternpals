@@ -92,27 +92,43 @@ export default function PaywallScreen({ navigation, route }) {
     setLoading(true);
     try {
       if (Purchases) {
-        // Real RevenueCat purchase
+        // Show what offerings we get
         const offerings = await Purchases.getOfferings();
         const pkg = offerings?.current?.availablePackages?.[0];
-        if (pkg) {
-          const { customerInfo } = await Purchases.purchasePackage(pkg);
-          const isPremium = customerInfo.entitlements.active["premium"];
-          if (isPremium) {
-            await unlockPremium();
-            setLoading(false);
-            Alert.alert(
-              "🎉 Welcome to Premium!",
-              "All 9 Pals and every feature are now unlocked!",
-              [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
-            );
-            return;
-          }
+
+        if (!pkg) {
+          setLoading(false);
+          Alert.alert(
+            "Setup Error",
+            "No packages found. Offerings: " +
+              JSON.stringify(offerings?.current?.identifier) +
+              " Packages: " +
+              JSON.stringify(offerings?.current?.availablePackages?.length),
+          );
+          return;
         }
-        setLoading(false);
-        Alert.alert("Purchase Failed", "Please try again.");
+
+        const { customerInfo } = await Purchases.purchasePackage(pkg);
+        const isPremium = customerInfo.entitlements.active["premium"];
+
+        if (isPremium) {
+          await unlockPremium();
+          setLoading(false);
+          Alert.alert(
+            "🎉 Welcome to Premium!",
+            "All 9 Pals and every feature are now unlocked!",
+            [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
+          );
+        } else {
+          setLoading(false);
+          Alert.alert(
+            "Not Unlocked",
+            "Purchase went through but entitlement not active. Active: " +
+              JSON.stringify(Object.keys(customerInfo.entitlements.active)),
+          );
+        }
       } else {
-        // Fallback simulation (dev only)
+        // Fallback simulation
         await new Promise((r) => setTimeout(r, 900));
         await unlockPremium();
         setLoading(false);
@@ -124,12 +140,15 @@ export default function PaywallScreen({ navigation, route }) {
       }
     } catch (e) {
       setLoading(false);
-      if (e?.code === "PURCHASE_CANCELLED") {
+      if (e?.code === "PURCHASE_CANCELLED" || e?.userCancelled) {
         // User cancelled — no error needed
       } else {
         Alert.alert(
-          "Purchase Failed",
-          "Please try again or restore a previous purchase.",
+          "Error Details",
+          "Code: " +
+            (e?.code || "none") +
+            "\nMessage: " +
+            (e?.message || String(e)),
         );
       }
     }
