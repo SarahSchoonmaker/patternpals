@@ -60,21 +60,18 @@ export default function PaywallScreen({ navigation, route }) {
   const [Purchases, setPurchases] = useState(null);
 
   useEffect(() => {
-    // Dynamically load RevenueCat to avoid crash if not installed
-    import("react-native-purchases")
-      .then((mod) => {
-        const RC = mod.default || mod;
-        try {
-          // Replace YOUR_REVENUECAT_API_KEY with your actual key from app.revenuecat.com
-          RC.configure({ apiKey: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY });
-          setPurchases(RC);
-        } catch (e) {
-          console.log("RevenueCat config error:", e);
-        }
-      })
-      .catch(() => {
-        console.log("RevenueCat not installed — using simulation");
-      });
+    async function loadRC() {
+      try {
+        const Purchases = require("react-native-purchases").default;
+        Purchases.configure({
+          apiKey: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY,
+        });
+        setPurchases(Purchases);
+      } catch (e) {
+        console.log("RevenueCat load error:", e.message);
+      }
+    }
+    loadRC();
   }, []);
 
   function checkGate() {
