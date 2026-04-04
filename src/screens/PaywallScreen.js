@@ -1,5 +1,6 @@
 // src/screens/PaywallScreen.js
 import React, { useState, useEffect } from "react";
+import Purchases from "react-native-purchases";
 import {
   View,
   Text,
@@ -57,21 +58,9 @@ export default function PaywallScreen({ navigation, route }) {
 
   // Purchase
   const [loading, setLoading] = useState(false);
-  const [Purchases, setPurchases] = useState(null);
 
   useEffect(() => {
-    async function loadRC() {
-      try {
-        const Purchases = require("react-native-purchases").default;
-        Purchases.configure({
-          apiKey: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY,
-        });
-        setPurchases(Purchases);
-      } catch (e) {
-        console.log("RevenueCat load error:", e.message);
-      }
-    }
-    loadRC();
+    Purchases.configure({ apiKey: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY });
   }, []);
 
   function checkGate() {
@@ -88,45 +77,22 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      if (Purchases) {
-        // Show what offerings we get
-        const offerings = await Purchases.getOfferings();
-        const pkg = offerings?.current?.availablePackages?.[0];
+      const offerings = await Purchases.getOfferings();
+      const pkg = offerings?.current?.availablePackages?.[0];
 
-        if (!pkg) {
-          setLoading(false);
-          Alert.alert(
-            "Setup Error",
-            "No packages found. Offerings: " +
-              JSON.stringify(offerings?.current?.identifier) +
-              " Packages: " +
-              JSON.stringify(offerings?.current?.availablePackages?.length),
-          );
-          return;
-        }
+      if (!pkg) {
+        setLoading(false);
+        Alert.alert(
+          "Nothing Found",
+          "Could not load purchase options. Please try again.",
+        );
+        return;
+      }
 
-        const { customerInfo } = await Purchases.purchasePackage(pkg);
-        const isPremium = customerInfo.entitlements.active["premium"];
+      const { customerInfo } = await Purchases.purchasePackage(pkg);
+      const isPremium = customerInfo.entitlements.active["premium"];
 
-        if (isPremium) {
-          await unlockPremium();
-          setLoading(false);
-          Alert.alert(
-            "🎉 Welcome to Premium!",
-            "All 9 Pals and every feature are now unlocked!",
-            [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
-          );
-        } else {
-          setLoading(false);
-          Alert.alert(
-            "Not Unlocked",
-            "Purchase went through but entitlement not active. Active: " +
-              JSON.stringify(Object.keys(customerInfo.entitlements.active)),
-          );
-        }
-      } else {
-        // Fallback simulation
-        await new Promise((r) => setTimeout(r, 900));
+      if (isPremium) {
         await unlockPremium();
         setLoading(false);
         Alert.alert(
@@ -134,19 +100,19 @@ export default function PaywallScreen({ navigation, route }) {
           "All 9 Pals and every feature are now unlocked!",
           [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
         );
+      } else {
+        setLoading(false);
+        Alert.alert(
+          "Purchase Failed",
+          "Please try again or restore a previous purchase.",
+        );
       }
     } catch (e) {
       setLoading(false);
-      if (e?.code === "PURCHASE_CANCELLED" || e?.userCancelled) {
+      if (e?.userCancelled) {
         // User cancelled — no error needed
       } else {
-        Alert.alert(
-          "Error Details",
-          "Code: " +
-            (e?.code || "none") +
-            "\nMessage: " +
-            (e?.message || String(e)),
-        );
+        Alert.alert("Purchase Failed", e?.message || "Please try again.");
       }
     }
   }
@@ -154,17 +120,15 @@ export default function PaywallScreen({ navigation, route }) {
   async function handleRestore() {
     setLoading(true);
     try {
-      if (Purchases) {
-        const customerInfo = await Purchases.restorePurchases();
-        const isPremium = customerInfo.entitlements.active["premium"];
-        if (isPremium) {
-          await unlockPremium();
-          setLoading(false);
-          Alert.alert("✓ Purchase Restored!", "Your premium access is back!", [
-            { text: "Great!", onPress: () => navigation.goBack() },
-          ]);
-          return;
-        }
+      const customerInfo = await Purchases.restorePurchases();
+      const isPremium = customerInfo.entitlements.active["premium"];
+      if (isPremium) {
+        await unlockPremium();
+        setLoading(false);
+        Alert.alert("✓ Purchase Restored!", "Your premium access is back!", [
+          { text: "Great!", onPress: () => navigation.goBack() },
+        ]);
+        return;
       }
       setLoading(false);
       Alert.alert(
