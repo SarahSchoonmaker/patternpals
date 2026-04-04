@@ -259,8 +259,6 @@ npm run submit:android  # Submit Android to Play Store
 
 ---
 
-_Built with ❤️ by KindredPal — technology that brings people together_
-
 ```
 
 ```
