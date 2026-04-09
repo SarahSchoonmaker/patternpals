@@ -1,15 +1,14 @@
 // src/hooks/useSound.js
-import { useEffect, useRef } from "react";
 import { Audio } from "expo-av";
 
-// Global sound instance so music persists across screens
+// Global sound instance — persists across screens
 let bgMusic = null;
 let isMusicEnabled = true;
 
 export async function initAudio() {
   try {
     await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: false, // respects silent switch
+      playsInSilentModeIOS: false,
       staysActiveInBackground: false,
       shouldDuckAndroid: true,
     });
@@ -22,7 +21,10 @@ export async function startMusic() {
   try {
     if (!isMusicEnabled) return;
     if (bgMusic) {
-      await bgMusic.playAsync();
+      const status = await bgMusic.getStatusAsync();
+      if (status.isLoaded && !status.isPlaying) {
+        await bgMusic.playAsync();
+      }
       return;
     }
     const { sound } = await Audio.Sound.createAsync(
@@ -34,8 +36,9 @@ export async function startMusic() {
       },
     );
     bgMusic = sound;
+    console.log("Music started!");
   } catch (e) {
-    console.log("Music start error:", e);
+    console.log("Music start error:", e.message);
   }
 }
 
@@ -61,11 +64,4 @@ export async function toggleMusic() {
 
 export function getMusicEnabled() {
   return isMusicEnabled;
-}
-
-// Sound effects
-export async function playSound(type) {
-  // We'll use simple Haptics for now since sound effects
-  // require additional audio files
-  // You can add sound effect files later
 }
