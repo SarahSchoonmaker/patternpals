@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#1e3a6e"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.sschoonm.kindredpal",
@@ -27,7 +29,9 @@
       },
       "package": "com.sschoonm.kindredpal",
       "versionCode": 1,
-      "permissions": ["android.permission.VIBRATE"]
+      "permissions": [
+        "android.permission.VIBRATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -37,6 +41,9 @@
         "projectId": "60c90981-bccc-4d26-a1d2-ab39f77fb5f6"
       }
     },
-    "owner": "sschoonm"
+    "owner": "sschoonm",
+    "plugins": [
+      "expo-audio"
+    ]
   }
 }
