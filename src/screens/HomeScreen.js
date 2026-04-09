@@ -18,6 +18,12 @@ import {
   getJourneyLevel,
   patchSave,
 } from "../hooks/useStorage";
+import {
+  initAudio,
+  startMusic,
+  toggleMusic,
+  getMusicEnabled,
+} from "../hooks/useSound";
 import { PALS, DAILY_CHALLENGES, EMOTIONS } from "../data/gameData";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
 import { Pill, Button } from "../components/UI";
@@ -28,6 +34,7 @@ export default function HomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [save, setSave] = useState(null);
   const [logoTaps, setLogoTaps] = useState(0);
+  const [musicOn, setMusicOn] = useState(true);
 
   async function handleLogoTap() {
     const newCount = logoTaps + 1;
@@ -43,6 +50,7 @@ export default function HomeScreen({ navigation }) {
   useFocusEffect(
     useCallback(() => {
       loadSave().then(setSave);
+      initAudio().then(() => startMusic());
     }, []),
   );
 
@@ -82,6 +90,15 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.logo}>🐾 Pal Feelings</Text>
           </TouchableOpacity>
           <View style={styles.topBtns}>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={async () => {
+                const on = await toggleMusic();
+                setMusicOn(on);
+              }}
+            >
+              <Text style={styles.iconBtnText}>{musicOn ? "🔊" : "🔇"}</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.iconBtn}
               onPress={() => navigation.navigate("Leaderboard")}
