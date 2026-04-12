@@ -8,7 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
 import Purchases from "react-native-purchases";
-import { loadSave, unlockPremium } from "./src/hooks/useStorage";
+import { unlockPremium } from "./src/hooks/useStorage";
 
 import HomeScreen from "./src/screens/HomeScreen";
 import GameScreen from "./src/screens/GameScreen";
@@ -24,7 +24,8 @@ SplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
 
-const REVENUECAT_API_KEY = "appl_IwZoNBGzBcLtROjCXgfJgXPJpfI";
+// RevenueCat public iOS SDK key — safe to include in app bundle
+const RC_KEY = "appl_IwZoNBGzBcLtROjCXgfJgXPJpfI";
 
 function getActiveRouteName(state) {
   if (!state) return "Home";
@@ -39,28 +40,31 @@ export default function App() {
   const navigationRef = useRef(null);
 
   useEffect(() => {
-    // Initialize RevenueCat immediately on app launch
     async function initApp() {
-      // Configure RevenueCat first
+      // 1. Configure RevenueCat — must happen before any purchase calls
       try {
         if (Platform.OS === "ios") {
-          Purchases.configure({ apiKey: REVENUECAT_API_KEY });
-          console.log("RevenueCat configured successfully");
+          Purchases.configure({ apiKey: RC_KEY });
+          console.log("RevenueCat ready");
+        }
+      } catch (e) {
+        console.log("RC configure error:", e.message);
+      }
 
-          // Check if user has active entitlement — auto-restore on reinstall
-          const customerInfo = await Purchases.getCustomerInfo();
-          const isPremium =
-            typeof customerInfo.entitlements.active["premium"] !== "undefined";
-          if (isPremium) {
+      // 2. Auto-restore premium if user reinstalled — separate try so never blocks
+      try {
+        if (Platform.OS === "ios") {
+          const info = await Purchases.getCustomerInfo();
+          if (info?.entitlements?.active?.["premium"]) {
             await unlockPremium();
-            console.log("Premium auto-restored from RevenueCat");
+            console.log("Premium restored automatically");
           }
         }
       } catch (e) {
-        console.log("RevenueCat init error:", e.message);
+        console.log("RC restore check skipped:", e.message);
       }
 
-      // Load fonts
+      // 3. Load fonts
       try {
         await Font.loadAsync({
           Baloo2_800ExtraBold: require("./node_modules/@expo-google-fonts/baloo-2/Baloo2_800ExtraBold.ttf"),
