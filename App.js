@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
 import Purchases from "react-native-purchases";
+import { loadSave, unlockPremium } from "./src/hooks/useStorage";
 
 import HomeScreen from "./src/screens/HomeScreen";
 import GameScreen from "./src/screens/GameScreen";
@@ -47,6 +48,15 @@ export default function App() {
         if (Platform.OS === "ios") {
           Purchases.configure({ apiKey: REVENUECAT_API_KEY });
           console.log("RevenueCat configured successfully");
+
+          // Check if user has active entitlement — auto-restore on reinstall
+          const customerInfo = await Purchases.getCustomerInfo();
+          const isPremium =
+            typeof customerInfo.entitlements.active["premium"] !== "undefined";
+          if (isPremium) {
+            await unlockPremium();
+            console.log("Premium auto-restored from RevenueCat");
+          }
         }
       } catch (e) {
         console.log("RevenueCat init error:", e.message);

@@ -89,24 +89,25 @@ export default function PaywallScreen({ navigation, route }) {
       const isPremium =
         typeof customerInfo.entitlements.active["premium"] !== "undefined";
 
-      if (isPremium) {
-        await unlockPremium();
-        setLoading(false);
-        Alert.alert(
-          "🎉 Welcome to Premium!",
-          "All 9 Pals and every feature are now unlocked!",
-          [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
-        );
-      } else {
-        // Purchase went through — unlock anyway
-        await unlockPremium();
-        setLoading(false);
-        Alert.alert(
-          "🎉 Welcome to Premium!",
-          "All 9 Pals and every feature are now unlocked!",
-          [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
-        );
-      }
+      // Purchase went through — unlock and navigate home
+      await unlockPremium();
+      setLoading(false);
+      Alert.alert(
+        "🎉 Welcome to Premium!",
+        "All 9 Pals and every feature are now unlocked!",
+        [
+          {
+            text: "Let's Go!",
+            onPress: () => {
+              // Navigate all the way back to Home
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "Home" }],
+              });
+            },
+          },
+        ],
+      );
     } catch (e) {
       setLoading(false);
       if (e?.userCancelled) {
