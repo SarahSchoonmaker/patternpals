@@ -1,12 +1,13 @@
 // App.js
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import { View, ActivityIndicator, Text } from "react-native";
+import { View, ActivityIndicator, Text, Platform } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
+import Purchases from "react-native-purchases";
 
 import HomeScreen from "./src/screens/HomeScreen";
 import GameScreen from "./src/screens/GameScreen";
@@ -22,6 +23,10 @@ SplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
 
+const REVENUECAT_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ||
+  "appl_IwZoNBGzBcLtROjCXgfJgXPJpfI";
+
 function getActiveRouteName(state) {
   if (!state) return "Home";
   const route = state.routes[state.index];
@@ -35,7 +40,19 @@ export default function App() {
   const navigationRef = useRef(null);
 
   useEffect(() => {
-    async function loadFonts() {
+    // Initialize RevenueCat immediately on app launch
+    async function initApp() {
+      // Configure RevenueCat first
+      try {
+        if (Platform.OS === "ios") {
+          Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+          console.log("RevenueCat configured successfully");
+        }
+      } catch (e) {
+        console.log("RevenueCat init error:", e.message);
+      }
+
+      // Load fonts
       try {
         await Font.loadAsync({
           Baloo2_800ExtraBold: require("./node_modules/@expo-google-fonts/baloo-2/Baloo2_800ExtraBold.ttf"),
@@ -50,7 +67,7 @@ export default function App() {
         setFontsLoaded(true);
       }
     }
-    loadFonts();
+    initApp();
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
