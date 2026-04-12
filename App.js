@@ -24,9 +24,7 @@ SplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
 
-const REVENUECAT_API_KEY =
-  process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ||
-  "appl_IwZoNBGzBcLtROjCXgfJgXPJpfI";
+const REVENUECAT_API_KEY = "appl_IwZoNBGzBcLtROjCXgfJgXPJpfI";
 
 function getActiveRouteName(state) {
   if (!state) return "Home";
