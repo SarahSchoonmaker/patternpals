@@ -70,24 +70,43 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      // Get offerings from RevenueCat (already initialized in App.js)
+      // Step 1 — get offerings
       const offerings = await Purchases.getOfferings();
+      console.log("Offerings current:", offerings?.current?.identifier);
+      console.log(
+        "Packages count:",
+        offerings?.current?.availablePackages?.length,
+      );
+
       const pkg =
         offerings?.current?.availablePackages?.[0] ||
         Object.values(offerings?.all || {})[0]?.availablePackages?.[0];
 
+      console.log(
+        "Package found:",
+        pkg?.identifier,
+        pkg?.product?.productIdentifier,
+      );
+
       if (!pkg) {
         setLoading(false);
         Alert.alert(
-          "Unavailable",
-          "Purchase not available right now. Please try again later.",
+          "Setup Error",
+          "No packages found. Current offering: " +
+            (offerings?.current?.identifier || "none") +
+            " All offerings: " +
+            Object.keys(offerings?.all || {}).join(", "),
         );
         return;
       }
 
+      // Step 2 — purchase
+      console.log("Attempting purchase...");
       const { customerInfo } = await Purchases.purchasePackage(pkg);
-      const isPremium =
-        typeof customerInfo.entitlements.active["premium"] !== "undefined";
+      console.log(
+        "Purchase complete. Active entitlements:",
+        Object.keys(customerInfo.entitlements.active),
+      );
 
       // Purchase went through — unlock and navigate home
       await unlockPremium();
@@ -99,7 +118,6 @@ export default function PaywallScreen({ navigation, route }) {
           {
             text: "Let's Go!",
             onPress: () => {
-              // Navigate all the way back to Home
               navigation.reset({
                 index: 0,
                 routes: [{ name: "Home" }],
@@ -110,14 +128,31 @@ export default function PaywallScreen({ navigation, route }) {
       );
     } catch (e) {
       setLoading(false);
-      if (e?.userCancelled) {
-        // Silent — user cancelled
-      } else {
-        Alert.alert(
-          "Purchase Failed",
-          "Please try again or restore a previous purchase.",
-        );
+      console.log("Purchase error:", JSON.stringify(e));
+      // Check all possible cancel codes
+      if (
+        e?.userCancelled === true ||
+        e?.code === "PURCHASE_CANCELLED" ||
+        e?.message?.toLowerCase().includes("cancel") ||
+        e?.message?.toLowerCase().includes("dismiss")
+      ) {
+        // User cancelled — silent, no error
+        return;
       }
+      // If already purchased — just unlock
+      if (
+        e?.code === "PRODUCT_ALREADY_PURCHASED" ||
+        e?.message?.toLowerCase().includes("already")
+      ) {
+        await unlockPremium();
+        navigation.reset({ index: 0, routes: [{ name: "Home" }] });
+        return;
+      }
+      Alert.alert(
+        "Purchase Failed",
+        'Please try again. If the problem persists tap "Restore Previous Purchase".',
+        [{ text: "OK" }],
+      );
     }
   }
 
