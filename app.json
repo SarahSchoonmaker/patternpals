@@ -38,6 +38,6 @@
       }
     },
     "owner": "sschoonm",
-    "plugins": ["expo-audio", "expo-in-app-purchases"]
+    "plugins": ["expo-audio"]
   }
 }
