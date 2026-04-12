@@ -19,7 +19,7 @@ import {
 } from "react-native-safe-area-context";
 import { unlockPremium } from "../hooks/useStorage";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
-import Purchases from "react-native-purchases";
+import Purchases, { PACKAGE_TYPE } from "react-native-purchases";
 
 const FEATURES_FREE = [
   { icon: "🐼", text: "Panda pal only" },
@@ -70,8 +70,11 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
+      // Handle different export patterns across RC versions
+      const RC = Purchases.default || Purchases;
+
       // Step 1 — get offerings
-      const offerings = await Purchases.getOfferings();
+      const offerings = await RC.getOfferings();
       console.log("Offerings current:", offerings?.current?.identifier);
       console.log(
         "Packages count:",
@@ -102,7 +105,7 @@ export default function PaywallScreen({ navigation, route }) {
 
       // Step 2 — purchase
       console.log("Attempting purchase...");
-      const { customerInfo } = await Purchases.purchasePackage(pkg);
+      const { customerInfo } = await RC.purchasePackage(pkg);
       console.log(
         "Purchase complete. Active entitlements:",
         Object.keys(customerInfo.entitlements.active),
@@ -164,7 +167,8 @@ export default function PaywallScreen({ navigation, route }) {
   async function handleRestore() {
     setLoading(true);
     try {
-      const customerInfo = await Purchases.restorePurchases();
+      const RCr = Purchases.default || Purchases;
+      const customerInfo = await RCr.restorePurchases();
       const isPremium =
         typeof customerInfo.entitlements.active["premium"] !== "undefined";
       if (isPremium) {

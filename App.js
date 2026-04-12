@@ -44,7 +44,8 @@ export default function App() {
       // 1. Configure RevenueCat — must happen before any purchase calls
       try {
         if (Platform.OS === "ios") {
-          Purchases.configure({ apiKey: RC_KEY });
+          const RC = Purchases.default || Purchases;
+          RC.configure({ apiKey: RC_KEY });
           console.log("RevenueCat ready");
         }
       } catch (e) {
@@ -54,7 +55,8 @@ export default function App() {
       // 2. Auto-restore premium if user reinstalled — separate try so never blocks
       try {
         if (Platform.OS === "ios") {
-          const info = await Purchases.getCustomerInfo();
+          const RC2 = Purchases.default || Purchases;
+          const info = await RC2.getCustomerInfo();
           if (info?.entitlements?.active?.["premium"]) {
             await unlockPremium();
             console.log("Premium restored automatically");
