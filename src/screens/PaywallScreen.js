@@ -1,5 +1,5 @@
 // src/screens/PaywallScreen.js
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -19,9 +19,6 @@ import {
 } from "react-native-safe-area-context";
 import { unlockPremium } from "../hooks/useStorage";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
-import * as InAppPurchases from "expo-in-app-purchases";
-
-const PRODUCT_ID = "com.sschoonm.kindredpal.premium";
 
 const FEATURES_FREE = [
   { icon: "🐼", text: "Panda pal only" },
@@ -57,62 +54,6 @@ export default function PaywallScreen({ navigation, route }) {
   });
 
   const [loading, setLoading] = useState(false);
-  const [iapReady, setIapReady] = useState(false);
-
-  useEffect(() => {
-    setupIAP();
-    return () => {
-      InAppPurchases.disconnectAsync().catch(() => {});
-    };
-  }, []);
-
-  async function setupIAP() {
-    try {
-      await InAppPurchases.connectAsync();
-      const { results } = await InAppPurchases.getProductsAsync([PRODUCT_ID]);
-      if (results && results.length > 0) {
-        setIapReady(true);
-        console.log("IAP ready:", results[0].productId);
-      } else {
-        console.log("No IAP products found");
-      }
-
-      InAppPurchases.setPurchaseListener(
-        async ({ responseCode, results, errorCode }) => {
-          if (responseCode === InAppPurchases.IAPResponseCode.OK) {
-            for (const purchase of results) {
-              if (!purchase.acknowledged) {
-                await InAppPurchases.finishTransactionAsync(purchase, true);
-              }
-            }
-            await unlockPremium();
-            setLoading(false);
-            Alert.alert(
-              "🎉 Welcome to Premium!",
-              "All 9 Pals and every feature are now unlocked!",
-              [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
-            );
-          } else if (
-            responseCode === InAppPurchases.IAPResponseCode.USER_CANCELED
-          ) {
-            setLoading(false);
-          } else if (responseCode === InAppPurchases.IAPResponseCode.DEFERRED) {
-            setLoading(false);
-            Alert.alert(
-              "Purchase Pending",
-              "Your purchase is pending approval.",
-            );
-          } else {
-            setLoading(false);
-            Alert.alert("Purchase Failed", "Please try again.");
-          }
-        },
-      );
-    } catch (e) {
-      console.log("IAP setup error:", e.message);
-      setIapReady(false);
-    }
-  }
 
   function checkGate() {
     if (gateAnswer.trim() === gateQ.answer) {
@@ -128,23 +69,55 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      if (iapReady) {
-        await InAppPurchases.purchaseItemAsync(PRODUCT_ID);
-        // Result handled in setPurchaseListener above
-      } else {
-        // Simulate for dev/testing
-        await new Promise((r) => setTimeout(r, 800));
-        await unlockPremium();
-        setLoading(false);
-        Alert.alert(
-          "🎉 Welcome to Premium!",
-          "All 9 Pals and every feature are now unlocked!",
-          [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
-        );
+      // Load StoreKit dynamically — only works in production builds
+      const IAP = await import("expo-in-app-purchases").catch(() => null);
+
+      if (IAP) {
+        await IAP.connectAsync();
+        const { results } = await IAP.getProductsAsync([
+          "com.sschoonm.kindredpal.premium",
+        ]);
+
+        if (results && results.length > 0) {
+          IAP.setPurchaseListener(
+            async ({ responseCode, results: purchases }) => {
+              if (responseCode === IAP.IAPResponseCode.OK) {
+                for (const p of purchases) {
+                  if (!p.acknowledged)
+                    await IAP.finishTransactionAsync(p, true);
+                }
+                await unlockPremium();
+                setLoading(false);
+                Alert.alert(
+                  "🎉 Welcome to Premium!",
+                  "All 9 Pals and every feature are now unlocked!",
+                  [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
+                );
+              } else if (responseCode === IAP.IAPResponseCode.USER_CANCELED) {
+                setLoading(false);
+              } else {
+                setLoading(false);
+                Alert.alert("Purchase Failed", "Please try again.");
+              }
+            },
+          );
+          await IAP.purchaseItemAsync("com.sschoonm.kindredpal.premium");
+          return;
+        }
       }
+
+      // Fallback — simulate purchase for testing
+      await new Promise((r) => setTimeout(r, 900));
+      await unlockPremium();
+      setLoading(false);
+      Alert.alert(
+        "🎉 Welcome to Premium!",
+        "All 9 Pals and every feature are now unlocked!",
+        [{ text: "Let's Go!", onPress: () => navigation.goBack() }],
+      );
     } catch (e) {
       setLoading(false);
-      if (!e?.message?.includes("cancel")) {
+      if (!e?.message?.toLowerCase().includes("cancel")) {
         Alert.alert("Purchase Failed", "Please try again.");
       }
     }
@@ -153,18 +126,24 @@ export default function PaywallScreen({ navigation, route }) {
   async function handleRestore() {
     setLoading(true);
     try {
-      const { results } = await InAppPurchases.getPurchaseHistoryAsync();
-      const found = results?.find((p) => p.productId === PRODUCT_ID);
-      if (found) {
-        await unlockPremium();
-        setLoading(false);
-        Alert.alert("✓ Purchase Restored!", "Your premium access is back!", [
-          { text: "Great!", onPress: () => navigation.goBack() },
-        ]);
-      } else {
-        setLoading(false);
-        Alert.alert("Nothing to Restore", "No previous purchase found.");
+      const IAP = await import("expo-in-app-purchases").catch(() => null);
+      if (IAP) {
+        await IAP.connectAsync();
+        const { results } = await IAP.getPurchaseHistoryAsync();
+        const found = results?.find(
+          (p) => p.productId === "com.sschoonm.kindredpal.premium",
+        );
+        if (found) {
+          await unlockPremium();
+          setLoading(false);
+          Alert.alert("✓ Restored!", "Your premium access is back!", [
+            { text: "Great!", onPress: () => navigation.goBack() },
+          ]);
+          return;
+        }
       }
+      setLoading(false);
+      Alert.alert("Nothing to Restore", "No previous purchase found.");
     } catch (e) {
       setLoading(false);
       Alert.alert("Restore Failed", "Please try again.");
@@ -367,7 +346,6 @@ export default function PaywallScreen({ navigation, route }) {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-
   gateSafe: { flex: 1, justifyContent: "center", padding: spacing.lg },
   gateCard: {
     backgroundColor: "rgba(255,255,255,0.08)",
@@ -435,7 +413,6 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   gateBtnTxt: { fontFamily: fonts.displayBold, fontSize: 18, color: "white" },
-
   scroll: { padding: spacing.lg, paddingBottom: 50 },
   closeBtn: {
     alignSelf: "flex-end",
