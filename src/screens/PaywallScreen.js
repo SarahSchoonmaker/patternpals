@@ -149,8 +149,13 @@ export default function PaywallScreen({ navigation, route }) {
         return;
       }
       Alert.alert(
-        "Purchase Failed",
-        'Please try again. If the problem persists tap "Restore Previous Purchase".',
+        "Purchase Error",
+        "Code: " +
+          (e?.code || "none") +
+          "\nMessage: " +
+          (e?.message || String(e)) +
+          "\nCancelled: " +
+          e?.userCancelled,
         [{ text: "OK" }],
       );
     }
