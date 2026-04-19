@@ -70,6 +70,25 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
+      // Debug what Purchases actually is at runtime
+      console.log("Purchases:", typeof Purchases);
+      console.log("getOfferings:", typeof Purchases?.getOfferings);
+      console.log("purchasePackage:", typeof Purchases?.purchasePackage);
+
+      if (typeof Purchases?.getOfferings !== "function") {
+        setLoading(false);
+        Alert.alert(
+          "RC Debug",
+          "type:" +
+            typeof Purchases +
+            " getOfferings:" +
+            typeof Purchases?.getOfferings +
+            " keys:" +
+            JSON.stringify(Object.keys(Purchases || {}).slice(0, 8)),
+        );
+        return;
+      }
+
       // Step 1 — get offerings
       const offerings = await Purchases.getOfferings();
       console.log("Offerings current:", offerings?.current?.identifier);
