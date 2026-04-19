@@ -15,7 +15,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.sschoonm.kindredpal",
-      "buildNumber": "29",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
