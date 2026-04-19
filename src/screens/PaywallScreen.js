@@ -19,7 +19,7 @@ import {
 } from "react-native-safe-area-context";
 import { unlockPremium } from "../hooks/useStorage";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
-import Purchases from "react-native-purchases";
+import Purchases, { LOG_LEVEL } from "react-native-purchases";
 
 const FEATURES_FREE = [
   { icon: "🐼", text: "Panda pal only" },
@@ -70,10 +70,8 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      const RC = Purchases;
-
       // Step 1 — get offerings
-      const offerings = await RC.getOfferings();
+      const offerings = await Purchases.getOfferings();
       console.log("Offerings current:", offerings?.current?.identifier);
       console.log(
         "Packages count:",
@@ -104,7 +102,7 @@ export default function PaywallScreen({ navigation, route }) {
 
       // Step 2 — purchase
       console.log("Attempting purchase...");
-      const { customerInfo } = await RC.purchasePackage(pkg);
+      const { customerInfo } = await Purchases.purchasePackage(pkg);
       console.log(
         "Purchase complete. Active entitlements:",
         Object.keys(customerInfo.entitlements.active),
