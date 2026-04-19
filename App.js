@@ -9,6 +9,9 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
 import { unlockPremium } from "./src/hooks/useStorage";
 
+// react-native-purchases v9 uses named exports
+import Purchases, { LOG_LEVEL } from "react-native-purchases";
+
 import HomeScreen from "./src/screens/HomeScreen";
 import GameScreen from "./src/screens/GameScreen";
 import PalSelectScreen from "./src/screens/PalSelectScreen";
@@ -22,21 +25,17 @@ import BottomNav from "./src/components/BottomNav";
 SplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
-
 const RC_KEY = "appl_IwZoNBGzBcLtROjCXgfJgXPJpfI";
 
-// Configure RevenueCat at module level — before anything else
-let rcConfigured = false;
-try {
-  const RCModule = require("react-native-purchases");
-  const Purchases = RCModule.default || RCModule;
-  if (Purchases && typeof Purchases.configure === "function") {
+// Configure RevenueCat at module level — v9 syntax
+if (Platform.OS === "ios") {
+  try {
+    Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
     Purchases.configure({ apiKey: RC_KEY });
-    rcConfigured = true;
-    console.log("RevenueCat configured at module level");
+    console.log("RevenueCat v9 configured ✓");
+  } catch (e) {
+    console.log("RC configure error:", e.message);
   }
-} catch (e) {
-  console.log("RC module level config error:", e.message);
 }
 
 function getActiveRouteName(state) {
@@ -53,19 +52,17 @@ export default function App() {
 
   useEffect(() => {
     async function initApp() {
-      // Auto-restore premium if user reinstalled
-      if (rcConfigured) {
-        try {
-          const RCModule = require("react-native-purchases");
-          const Purchases = RCModule.default || RCModule;
+      // Auto-restore premium on reinstall
+      try {
+        if (Platform.OS === "ios") {
           const info = await Purchases.getCustomerInfo();
           if (info?.entitlements?.active?.["premium"]) {
             await unlockPremium();
             console.log("Premium auto-restored");
           }
-        } catch (e) {
-          console.log("Auto-restore skipped:", e.message);
         }
+      } catch (e) {
+        console.log("Auto-restore skipped:", e.message);
       }
 
       // Load fonts
