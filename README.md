@@ -49,7 +49,7 @@ npm install --legacy-peer-deps
 ### 3. Install the in-app purchase package
 
 ```bash
-npx expo install expo-in-app-purchases --legacy-peer-deps
+npx expo install expo-in-app-purchases -- --legacy-peer-deps
 ```
 
 ### 4. Start the development server

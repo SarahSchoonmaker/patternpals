@@ -19,7 +19,6 @@ import {
 } from "react-native-safe-area-context";
 import { unlockPremium } from "../hooks/useStorage";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
-import Purchases, { PACKAGE_TYPE } from "react-native-purchases";
 
 const FEATURES_FREE = [
   { icon: "🐼", text: "Panda pal only" },
@@ -70,8 +69,8 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      // Handle different export patterns across RC versions
-      const RC = Purchases.default || Purchases;
+      const RCMod = require("react-native-purchases");
+      const RC = RCMod.default || RCMod;
 
       // Step 1 — get offerings
       const offerings = await RC.getOfferings();
@@ -167,7 +166,8 @@ export default function PaywallScreen({ navigation, route }) {
   async function handleRestore() {
     setLoading(true);
     try {
-      const RCr = Purchases.default || Purchases;
+      const RCMod2 = require("react-native-purchases");
+      const RCr = RCMod2.default || RCMod2;
       const customerInfo = await RCr.restorePurchases();
       const isPremium =
         typeof customerInfo.entitlements.active["premium"] !== "undefined";

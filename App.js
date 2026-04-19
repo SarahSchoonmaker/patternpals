@@ -7,7 +7,6 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
-import Purchases from "react-native-purchases";
 import { unlockPremium } from "./src/hooks/useStorage";
 
 import HomeScreen from "./src/screens/HomeScreen";
@@ -24,8 +23,21 @@ SplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
 
-// RevenueCat public iOS SDK key — safe to include in app bundle
 const RC_KEY = "appl_IwZoNBGzBcLtROjCXgfJgXPJpfI";
+
+// Configure RevenueCat at module level — before anything else
+let rcConfigured = false;
+try {
+  const RCModule = require("react-native-purchases");
+  const Purchases = RCModule.default || RCModule;
+  if (Purchases && typeof Purchases.configure === "function") {
+    Purchases.configure({ apiKey: RC_KEY });
+    rcConfigured = true;
+    console.log("RevenueCat configured at module level");
+  }
+} catch (e) {
+  console.log("RC module level config error:", e.message);
+}
 
 function getActiveRouteName(state) {
   if (!state) return "Home";
@@ -41,32 +53,22 @@ export default function App() {
 
   useEffect(() => {
     async function initApp() {
-      // 1. Configure RevenueCat — must happen before any purchase calls
-      try {
-        if (Platform.OS === "ios") {
-          const RC = Purchases.default || Purchases;
-          RC.configure({ apiKey: RC_KEY });
-          console.log("RevenueCat ready");
-        }
-      } catch (e) {
-        console.log("RC configure error:", e.message);
-      }
-
-      // 2. Auto-restore premium if user reinstalled — separate try so never blocks
-      try {
-        if (Platform.OS === "ios") {
-          const RC2 = Purchases.default || Purchases;
-          const info = await RC2.getCustomerInfo();
+      // Auto-restore premium if user reinstalled
+      if (rcConfigured) {
+        try {
+          const RCModule = require("react-native-purchases");
+          const Purchases = RCModule.default || RCModule;
+          const info = await Purchases.getCustomerInfo();
           if (info?.entitlements?.active?.["premium"]) {
             await unlockPremium();
-            console.log("Premium restored automatically");
+            console.log("Premium auto-restored");
           }
+        } catch (e) {
+          console.log("Auto-restore skipped:", e.message);
         }
-      } catch (e) {
-        console.log("RC restore check skipped:", e.message);
       }
 
-      // 3. Load fonts
+      // Load fonts
       try {
         await Font.loadAsync({
           Baloo2_800ExtraBold: require("./node_modules/@expo-google-fonts/baloo-2/Baloo2_800ExtraBold.ttf"),
@@ -148,7 +150,6 @@ export default function App() {
                   options={{ animation: "slide_from_bottom" }}
                 />
               </Stack.Navigator>
-
               <BottomNav
                 navigation={navigationRef}
                 currentRoute={currentRoute}
