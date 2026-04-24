@@ -1,4 +1,11 @@
 // src/screens/PaywallScreen.js
+import * as RCFull from "react-native-purchases";
+console.log("RCFull keys:", JSON.stringify(Object.keys(RCFull)));
+console.log("RCFull.default type:", typeof RCFull.default);
+console.log(
+  "RCFull.default keys:",
+  JSON.stringify(Object.keys(RCFull.default || {})),
+);
 import React, { useState } from "react";
 import {
   View,
