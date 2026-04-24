@@ -125,13 +125,9 @@ export default function PaywallScreen({ navigation, route }) {
 
       // Step 2 — purchase
       console.log("Attempting purchase...");
-      const { customerInfo } = await P.purchasePackage(pkg);
-      console.log(
-        "Purchase complete. Active entitlements:",
-        Object.keys(customerInfo.entitlements.active),
-      );
-
-      // Purchase went through — unlock and navigate home
+      const result = await P.purchasePackage(pkg);
+      console.log("Purchase result received");
+      // Purchase succeeded — unlock immediately
       await unlockPremium();
       setLoading(false);
       Alert.alert(
