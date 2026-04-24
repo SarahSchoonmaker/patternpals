@@ -70,25 +70,29 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      // Load RC inline — most reliable pattern for Metro bundler
+      // Use the Purchases singleton directly — it's already configured in App.js
+      // Access via require to get the actual class not the module wrapper
       const RC = require("react-native-purchases");
-      const P = RC.default?.configure
-        ? RC.default
-        : RC.Purchases || RC.default || RC;
+      // purchases.js exports: exports.default = Purchases (the class)
+      // index.js re-exports: exports.default = purchases_1.default
+      // So RC.default = Purchases class with all static methods
+      const P = RC.default;
 
-      console.log("P type:", typeof P);
+      console.log(
+        "isConfigured:",
+        typeof P?.isConfigured === "function" ? P.isConfigured() : "n/a",
+      );
+      console.log("purchasePackage:", typeof P?.purchasePackage);
       console.log("getOfferings:", typeof P?.getOfferings);
 
       if (typeof P?.getOfferings !== "function") {
         setLoading(false);
         Alert.alert(
           "RC Error",
-          "type:" +
-            typeof P +
-            "\ngetOfferings:" +
-            typeof P?.getOfferings +
+          "RC.default type:" +
+            typeof RC.default +
             "\nRC keys:" +
-            JSON.stringify(Object.keys(RC).slice(0, 8)),
+            JSON.stringify(Object.keys(RC)),
         );
         return;
       }
@@ -125,7 +129,7 @@ export default function PaywallScreen({ navigation, route }) {
 
       // Step 2 — purchase
       console.log("Attempting purchase...");
-      const result = await P.purchasePackage(pkg);
+      const { customerInfo } = await P.purchasePackage(pkg);
       console.log("Purchase result received");
       // Purchase succeeded — unlock immediately
       await unlockPremium();
