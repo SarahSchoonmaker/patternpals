@@ -19,9 +19,7 @@ import {
 } from "react-native-safe-area-context";
 import { unlockPremium } from "../hooks/useStorage";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
-// RevenueCat — module level require so Metro bundles it correctly
-const _RC = require("react-native-purchases");
-const _Purchases = _RC && _RC.default ? _RC.default : _RC;
+import Purchases from "react-native-purchases";
 
 const FEATURES_FREE = [
   { icon: "🐼", text: "Panda pal only" },
@@ -72,29 +70,11 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      // Use module-level Purchases
-      const P = _Purchases;
-      console.log("P.getOfferings:", typeof P?.getOfferings);
-      console.log("P.purchasePackage:", typeof P?.purchasePackage);
-
-      if (typeof P?.getOfferings !== "function") {
-        setLoading(false);
-        Alert.alert(
-          "RC Error",
-          "P type:" +
-            typeof P +
-            "\n_RC type:" +
-            typeof _RC +
-            "\n_RC.default type:" +
-            typeof _RC?.default +
-            "\nKeys:" +
-            JSON.stringify(Object.keys(_RC || {})),
-        );
-        return;
-      }
+      console.log("RC isConfigured:", Purchases.isConfigured());
+      console.log("getOfferings type:", typeof Purchases.getOfferings);
 
       // Step 1 — get offerings
-      const offerings = await P.getOfferings();
+      const offerings = await Purchases.getOfferings();
       console.log("Offerings current:", offerings?.current?.identifier);
       console.log(
         "Packages count:",
@@ -125,7 +105,8 @@ export default function PaywallScreen({ navigation, route }) {
 
       // Step 2 — purchase
       console.log("Attempting purchase...");
-      const { customerInfo } = await P.purchasePackage(pkg);
+      const result = await Purchases.purchasePackage(pkg);
+      const customerInfo = result?.customerInfo || result;
       console.log("Purchase result received");
       // Purchase succeeded — unlock immediately
       await unlockPremium();
@@ -183,7 +164,7 @@ export default function PaywallScreen({ navigation, route }) {
   async function handleRestore() {
     setLoading(true);
     try {
-      const customerInfo = await _Purchases.restorePurchases();
+      const customerInfo = await Purchases.restorePurchases();
       const isPremium =
         typeof customerInfo.entitlements.active["premium"] !== "undefined";
       if (isPremium) {
