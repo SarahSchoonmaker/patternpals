@@ -10,10 +10,9 @@ import * as Font from "expo-font";
 import { unlockPremium } from "./src/hooks/useStorage";
 
 // react-native-purchases v9 uses named exports
-import * as RCModule from "react-native-purchases";
-const { LOG_LEVEL, STOREKIT_VERSION } = RCModule;
-// v9 wraps the class — unwrap correctly
-const Purchases = RCModule.default?.default || RCModule.default || RCModule;
+// react-native-purchases v7
+const _RCApp = require("react-native-purchases");
+const Purchases = _RCApp && _RCApp.default ? _RCApp.default : _RCApp;
 
 import HomeScreen from "./src/screens/HomeScreen";
 import GameScreen from "./src/screens/GameScreen";
@@ -33,11 +32,7 @@ const RC_KEY = "appl_IwZoNBGzBcLtROjCXgfJgXPJpfI";
 // Configure RevenueCat at module level — v9 syntax
 if (Platform.OS === "ios") {
   try {
-    Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
-    Purchases.configure({
-      apiKey: RC_KEY,
-      storeKitVersion: STOREKIT_VERSION.STOREKIT_1,
-    });
+    Purchases.configure({ apiKey: RC_KEY });
     console.log("RevenueCat v9 configured ✓");
   } catch (e) {
     console.log("RC configure error:", e.message);

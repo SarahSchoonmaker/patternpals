@@ -19,7 +19,9 @@ import {
 } from "react-native-safe-area-context";
 import { unlockPremium } from "../hooks/useStorage";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
-// RevenueCat loaded inline to ensure correct unwrapping
+// RevenueCat — module level require so Metro bundles it correctly
+const _RC = require("react-native-purchases");
+const _Purchases = _RC && _RC.default ? _RC.default : _RC;
 
 const FEATURES_FREE = [
   { icon: "🐼", text: "Panda pal only" },
@@ -70,29 +72,23 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      // Use the Purchases singleton directly — it's already configured in App.js
-      // Access via require to get the actual class not the module wrapper
-      const RC = require("react-native-purchases");
-      // purchases.js exports: exports.default = Purchases (the class)
-      // index.js re-exports: exports.default = purchases_1.default
-      // So RC.default = Purchases class with all static methods
-      const P = RC.default;
-
-      console.log(
-        "isConfigured:",
-        typeof P?.isConfigured === "function" ? P.isConfigured() : "n/a",
-      );
-      console.log("purchasePackage:", typeof P?.purchasePackage);
-      console.log("getOfferings:", typeof P?.getOfferings);
+      // Use module-level Purchases
+      const P = _Purchases;
+      console.log("P.getOfferings:", typeof P?.getOfferings);
+      console.log("P.purchasePackage:", typeof P?.purchasePackage);
 
       if (typeof P?.getOfferings !== "function") {
         setLoading(false);
         Alert.alert(
           "RC Error",
-          "RC.default type:" +
-            typeof RC.default +
-            "\nRC keys:" +
-            JSON.stringify(Object.keys(RC)),
+          "P type:" +
+            typeof P +
+            "\n_RC type:" +
+            typeof _RC +
+            "\n_RC.default type:" +
+            typeof _RC?.default +
+            "\nKeys:" +
+            JSON.stringify(Object.keys(_RC || {})),
         );
         return;
       }
@@ -187,11 +183,7 @@ export default function PaywallScreen({ navigation, route }) {
   async function handleRestore() {
     setLoading(true);
     try {
-      const RC2 = require("react-native-purchases");
-      const P2 = RC2.default?.configure
-        ? RC2.default
-        : RC2.Purchases || RC2.default || RC2;
-      const customerInfo = await P2.restorePurchases();
+      const customerInfo = await _Purchases.restorePurchases();
       const isPremium =
         typeof customerInfo.entitlements.active["premium"] !== "undefined";
       if (isPremium) {
