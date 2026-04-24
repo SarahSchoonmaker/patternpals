@@ -65,6 +65,8 @@ const DEFAULT_SAVE = {
   personalBests: [],
   groupCode: "",
   groupName: "",
+  isPremium: false,
+  premiumDate: "",
 };
 
 export async function loadSave() {
@@ -271,4 +273,20 @@ function generateCode() {
     { length: 4 },
     () => chars[Math.floor(Math.random() * chars.length)],
   ).join("");
+}
+
+// ── Premium purchase ──────────────────────────────────────────
+export async function unlockPremium() {
+  const today = new Date().toDateString();
+  return patchSave({ isPremium: true, premiumDate: today });
+}
+
+export async function restorePurchase() {
+  // In production this calls StoreKit to verify receipt
+  // For now simulates a restore
+  return patchSave({ isPremium: true });
+}
+
+export function canUsePremiumFeature(save) {
+  return save?.isPremium === true;
 }

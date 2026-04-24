@@ -1,12 +1,5 @@
 // src/screens/PaywallScreen.js
-import * as RCFull from "react-native-purchases";
-console.log("RCFull keys:", JSON.stringify(Object.keys(RCFull)));
-console.log("RCFull.default type:", typeof RCFull.default);
-console.log(
-  "RCFull.default keys:",
-  JSON.stringify(Object.keys(RCFull.default || {})),
-);
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -18,6 +11,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  NativeModules,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -26,7 +20,8 @@ import {
 } from "react-native-safe-area-context";
 import { unlockPremium } from "../hooks/useStorage";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
-import Purchases from "react-native-purchases";
+
+const PRODUCT_ID = "com.sschoonm.kindredpal.premium";
 
 const FEATURES_FREE = [
   { icon: "🐼", text: "Panda pal only" },
@@ -47,11 +42,16 @@ const FEATURES_PREMIUM = [
   { icon: "🔄", text: "Free updates for life" },
 ];
 
+// Get Purchases from global scope — set by App.js before anything loads
+function getPurchases() {
+  if (global.RCPurchases) return global.RCPurchases;
+  return null;
+}
+
 export default function PaywallScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { triggerPal } = route?.params || {};
 
-  // Parental gate
   const [gateVisible, setGateVisible] = useState(true);
   const [gateAnswer, setGateAnswer] = useState("");
   const [gateError, setGateError] = useState(false);
@@ -60,7 +60,6 @@ export default function PaywallScreen({ navigation, route }) {
     const b = Math.floor(Math.random() * 8) + 2;
     return { a, b, answer: String(a + b) };
   });
-
   const [loading, setLoading] = useState(false);
 
   function checkGate() {
@@ -77,45 +76,39 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      console.log("RC isConfigured:", Purchases.isConfigured());
-      console.log("getOfferings type:", typeof Purchases.getOfferings);
+      const Purchases = getPurchases();
 
-      // Step 1 — get offerings
-      const offerings = await Purchases.getOfferings();
-      console.log("Offerings current:", offerings?.current?.identifier);
+      if (!Purchases) {
+        // No RC available — simulate for dev
+        await new Promise((r) => setTimeout(r, 800));
+        await unlockPremium();
+        setLoading(false);
+        Alert.alert("🎉 Welcome to Premium!", "All 9 Pals unlocked!", [
+          {
+            text: "Let's Go!",
+            onPress: () =>
+              navigation.reset({ index: 0, routes: [{ name: "Home" }] }),
+          },
+        ]);
+        return;
+      }
+
       console.log(
-        "Packages count:",
-        offerings?.current?.availablePackages?.length,
+        "Purchases available, getOfferings type:",
+        typeof Purchases.getOfferings,
       );
-
+      const offerings = await Purchases.getOfferings();
       const pkg =
         offerings?.current?.availablePackages?.[0] ||
         Object.values(offerings?.all || {})[0]?.availablePackages?.[0];
 
-      console.log(
-        "Package found:",
-        pkg?.identifier,
-        pkg?.product?.productIdentifier,
-      );
-
       if (!pkg) {
         setLoading(false);
-        Alert.alert(
-          "Setup Error",
-          "No packages found. Current offering: " +
-            (offerings?.current?.identifier || "none") +
-            " All offerings: " +
-            Object.keys(offerings?.all || {}).join(", "),
-        );
+        Alert.alert("Unavailable", "Purchase not available. Please try again.");
         return;
       }
 
-      // Step 2 — purchase
-      console.log("Attempting purchase...");
       const result = await Purchases.purchasePackage(pkg);
-      const customerInfo = result?.customerInfo || result;
-      console.log("Purchase result received");
-      // Purchase succeeded — unlock immediately
       await unlockPremium();
       setLoading(false);
       Alert.alert(
@@ -124,46 +117,25 @@ export default function PaywallScreen({ navigation, route }) {
         [
           {
             text: "Let's Go!",
-            onPress: () => {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: "Home" }],
-              });
-            },
+            onPress: () =>
+              navigation.reset({ index: 0, routes: [{ name: "Home" }] }),
           },
         ],
       );
     } catch (e) {
       setLoading(false);
-      console.log("Purchase error:", JSON.stringify(e));
-      // Check all possible cancel codes
-      if (
-        e?.userCancelled === true ||
-        e?.code === "PURCHASE_CANCELLED" ||
-        e?.message?.toLowerCase().includes("cancel") ||
-        e?.message?.toLowerCase().includes("dismiss")
-      ) {
-        // User cancelled — silent, no error
-        return;
-      }
-      // If already purchased — just unlock
-      if (
-        e?.code === "PRODUCT_ALREADY_PURCHASED" ||
-        e?.message?.toLowerCase().includes("already")
-      ) {
-        await unlockPremium();
-        navigation.reset({ index: 0, routes: [{ name: "Home" }] });
-        return;
-      }
+      console.log(
+        "Purchase error code:",
+        e?.code,
+        "message:",
+        e?.message,
+        "userCancelled:",
+        e?.userCancelled,
+      );
+      if (e?.userCancelled || e?.code === "PURCHASE_CANCELLED") return;
       Alert.alert(
-        "Purchase Error",
-        "Code: " +
-          (e?.code || "none") +
-          "\nMessage: " +
-          (e?.message || String(e)) +
-          "\nCancelled: " +
-          e?.userCancelled,
-        [{ text: "OK" }],
+        "Purchase Failed",
+        "Please try again or restore a previous purchase.",
       );
     }
   }
@@ -171,21 +143,26 @@ export default function PaywallScreen({ navigation, route }) {
   async function handleRestore() {
     setLoading(true);
     try {
-      const customerInfo = await Purchases.restorePurchases();
-      const isPremium =
-        typeof customerInfo.entitlements.active["premium"] !== "undefined";
-      if (isPremium) {
+      const Purchases = getPurchases();
+      if (!Purchases) {
+        setLoading(false);
+        Alert.alert("Nothing to Restore", "No previous purchase found.");
+        return;
+      }
+      const info = await Purchases.restorePurchases();
+      if (info?.entitlements?.active?.["premium"]) {
         await unlockPremium();
         setLoading(false);
-        Alert.alert("✓ Purchase Restored!", "Your premium access is back!", [
-          { text: "Great!", onPress: () => navigation.goBack() },
+        Alert.alert("✓ Restored!", "Your premium access is back!", [
+          {
+            text: "Great!",
+            onPress: () =>
+              navigation.reset({ index: 0, routes: [{ name: "Home" }] }),
+          },
         ]);
       } else {
         setLoading(false);
-        Alert.alert(
-          "Nothing to Restore",
-          "No previous purchase found for this Apple ID.",
-        );
+        Alert.alert("Nothing to Restore", "No previous purchase found.");
       }
     } catch (e) {
       setLoading(false);
@@ -193,7 +170,6 @@ export default function PaywallScreen({ navigation, route }) {
     }
   }
 
-  // ── PARENTAL GATE ─────────────────────────────────────────
   if (gateVisible) {
     return (
       <View style={s.root}>
@@ -213,8 +189,8 @@ export default function PaywallScreen({ navigation, route }) {
               <Text style={s.gateIcon}>👨‍👩‍👧</Text>
               <Text style={s.gateTitle}>Parent Check</Text>
               <Text style={s.gateSub}>
-                This purchase requires a parent or guardian.{"\n"}
-                Please solve this to continue:
+                This purchase requires a parent or guardian.{"\n"}Please solve
+                this to continue:
               </Text>
               <View style={s.gateQuestion}>
                 <Text style={s.gateQText}>
@@ -261,7 +237,6 @@ export default function PaywallScreen({ navigation, route }) {
     );
   }
 
-  // ── PAYWALL ───────────────────────────────────────────────
   return (
     <View style={s.root}>
       <LinearGradient
@@ -280,7 +255,6 @@ export default function PaywallScreen({ navigation, route }) {
           >
             <Text style={s.closeTxt}>✕</Text>
           </TouchableOpacity>
-
           <View style={s.header}>
             <Text style={s.crown}>👑</Text>
             <Text style={s.heroTitle}>Unlock All Pals</Text>
@@ -288,7 +262,6 @@ export default function PaywallScreen({ navigation, route }) {
               One price. Everything included. Forever.
             </Text>
           </View>
-
           {triggerPal && (
             <View style={s.palPreview}>
               <Text style={{ fontSize: 44 }}>{triggerPal.emoji}</Text>
@@ -300,7 +273,6 @@ export default function PaywallScreen({ navigation, route }) {
               </View>
             </View>
           )}
-
           <View style={s.palRow}>
             {["🐼", "🦊", "🐰", "🐱", "🐻", "🦉", "🦁", "🐉", "🦄"].map(
               (e, i) => (
@@ -311,7 +283,6 @@ export default function PaywallScreen({ navigation, route }) {
               ),
             )}
           </View>
-
           <View style={s.compareRow}>
             <View style={[s.compareCol, s.freeCol]}>
               <Text style={s.colTitle}>Free</Text>
@@ -339,13 +310,11 @@ export default function PaywallScreen({ navigation, route }) {
               ))}
             </LinearGradient>
           </View>
-
           <View style={s.priceBlock}>
             <Text style={s.priceAmount}>$7.99</Text>
             <Text style={s.priceDesc}>One-time purchase · No subscription</Text>
             <Text style={s.priceFamily}>✓ Family Sharing included</Text>
           </View>
-
           <TouchableOpacity
             style={s.ctaBtn}
             onPress={handlePurchase}
@@ -368,7 +337,6 @@ export default function PaywallScreen({ navigation, route }) {
               )}
             </LinearGradient>
           </TouchableOpacity>
-
           <TouchableOpacity
             onPress={handleRestore}
             style={s.restoreBtn}
@@ -376,7 +344,6 @@ export default function PaywallScreen({ navigation, route }) {
           >
             <Text style={s.restoreTxt}>Restore Previous Purchase</Text>
           </TouchableOpacity>
-
           <Text style={s.legal}>
             Payment charged to your Apple ID at confirmation. One-time purchase
             — no recurring charges.

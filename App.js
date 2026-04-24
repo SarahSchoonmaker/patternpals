@@ -10,7 +10,10 @@ import * as Font from "expo-font";
 import { unlockPremium } from "./src/hooks/useStorage";
 
 // react-native-purchases v9 uses named exports
-import Purchases from "react-native-purchases";
+import * as RCFull from "react-native-purchases";
+const Purchases = RCFull.default;
+// Store in global so PaywallScreen can access without import issues
+global.RCPurchases = null;
 
 import HomeScreen from "./src/screens/HomeScreen";
 import GameScreen from "./src/screens/GameScreen";
@@ -31,7 +34,12 @@ const RC_KEY = "appl_IwZoNBGzBcLtROjCXgfJgXPJpfI";
 if (Platform.OS === "ios") {
   try {
     Purchases.configure({ apiKey: RC_KEY });
-    console.log("RC configured, isConfigured:", Purchases.isConfigured());
+    global.RCPurchases = Purchases;
+    console.log(
+      "RC configured globally. isConfigured:",
+      Purchases.isConfigured(),
+    );
+    console.log("getOfferings type:", typeof Purchases.getOfferings);
     console.log("RevenueCat v9 configured ✓");
   } catch (e) {
     console.log("RC configure error:", e.message);
@@ -69,7 +77,6 @@ export default function App() {
       try {
         await Font.loadAsync({
           Baloo2_800ExtraBold: require("./node_modules/@expo-google-fonts/baloo-2/Baloo2_800ExtraBold.ttf"),
-          Baloo2_900Black: require("./node_modules/@expo-google-fonts/baloo-2/Baloo2_900Black.ttf"),
           Nunito_400Regular: require("./node_modules/@expo-google-fonts/nunito/Nunito_400Regular.ttf"),
           Nunito_700Bold: require("./node_modules/@expo-google-fonts/nunito/Nunito_700Bold.ttf"),
           Nunito_800ExtraBold: require("./node_modules/@expo-google-fonts/nunito/Nunito_800ExtraBold.ttf"),
