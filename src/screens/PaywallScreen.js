@@ -19,7 +19,7 @@ import {
 } from "react-native-safe-area-context";
 import { unlockPremium } from "../hooks/useStorage";
 import { colors, fonts, radius, shadows, spacing } from "../utils/theme";
-import Purchases, { LOG_LEVEL } from "react-native-purchases";
+// RevenueCat loaded inline to ensure correct unwrapping
 
 const FEATURES_FREE = [
   { icon: "🐼", text: "Panda pal only" },
@@ -70,27 +70,31 @@ export default function PaywallScreen({ navigation, route }) {
   async function handlePurchase() {
     setLoading(true);
     try {
-      // Debug what Purchases actually is at runtime
-      console.log("Purchases:", typeof Purchases);
-      console.log("getOfferings:", typeof Purchases?.getOfferings);
-      console.log("purchasePackage:", typeof Purchases?.purchasePackage);
+      // Load RC inline — most reliable pattern for Metro bundler
+      const RC = require("react-native-purchases");
+      const P = RC.default?.configure
+        ? RC.default
+        : RC.Purchases || RC.default || RC;
 
-      if (typeof Purchases?.getOfferings !== "function") {
+      console.log("P type:", typeof P);
+      console.log("getOfferings:", typeof P?.getOfferings);
+
+      if (typeof P?.getOfferings !== "function") {
         setLoading(false);
         Alert.alert(
-          "RC Debug",
+          "RC Error",
           "type:" +
-            typeof Purchases +
-            " getOfferings:" +
-            typeof Purchases?.getOfferings +
-            " keys:" +
-            JSON.stringify(Object.keys(Purchases || {}).slice(0, 8)),
+            typeof P +
+            "\ngetOfferings:" +
+            typeof P?.getOfferings +
+            "\nRC keys:" +
+            JSON.stringify(Object.keys(RC).slice(0, 8)),
         );
         return;
       }
 
       // Step 1 — get offerings
-      const offerings = await Purchases.getOfferings();
+      const offerings = await P.getOfferings();
       console.log("Offerings current:", offerings?.current?.identifier);
       console.log(
         "Packages count:",
@@ -121,7 +125,7 @@ export default function PaywallScreen({ navigation, route }) {
 
       // Step 2 — purchase
       console.log("Attempting purchase...");
-      const { customerInfo } = await Purchases.purchasePackage(pkg);
+      const { customerInfo } = await P.purchasePackage(pkg);
       console.log(
         "Purchase complete. Active entitlements:",
         Object.keys(customerInfo.entitlements.active),
@@ -183,7 +187,11 @@ export default function PaywallScreen({ navigation, route }) {
   async function handleRestore() {
     setLoading(true);
     try {
-      const customerInfo = await Purchases.restorePurchases();
+      const RC2 = require("react-native-purchases");
+      const P2 = RC2.default?.configure
+        ? RC2.default
+        : RC2.Purchases || RC2.default || RC2;
+      const customerInfo = await P2.restorePurchases();
       const isPremium =
         typeof customerInfo.entitlements.active["premium"] !== "undefined";
       if (isPremium) {
