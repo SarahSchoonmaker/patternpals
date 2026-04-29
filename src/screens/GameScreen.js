@@ -103,14 +103,6 @@ const COMBOS = [
   },
 ];
 
-const COMBO_HINTS = [
-  { emos: "😄🤩", desc: "2× Score", color: "#FFD93D" },
-  { emos: "💪😤", desc: "Shield", color: "#4D96FF" },
-  { emos: "🤪😄", desc: "+Time", color: "#FF9A3C" },
-  { emos: "😴😊", desc: "Slow-mo", color: "#C77DFF" },
-  { emos: "😱💪", desc: "+50pts", color: "#6BCB77" },
-];
-
 const STARS = Array.from({ length: 25 }, (_, i) => ({
   top: `${(i * 37.3 + 7) % 100}%`,
   left: `${(i * 61.8 + 13) % 100}%`,
@@ -974,25 +966,6 @@ export default function GameScreen({ navigation, route }) {
             )}
           </View>
 
-          {/* Combo hints */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginBottom: spacing.sm }}
-          >
-            {COMBO_HINTS.map((c, i) => (
-              <View
-                key={i}
-                style={[s.comboHint, { borderColor: c.color + "80" }]}
-              >
-                <Text style={{ fontSize: 15 }}>{c.emos}</Text>
-                <Text style={[s.comboHintLabel, { color: c.color }]}>
-                  {c.desc}
-                </Text>
-              </View>
-            ))}
-          </ScrollView>
-
           {/* Story mode card */}
           {mode === "story" &&
             (() => {
@@ -1289,22 +1262,6 @@ const s = StyleSheet.create({
     fontWeight: "900",
   },
 
-  comboHint: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: radius.md,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    marginRight: 8,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  comboHintLabel: {
-    fontFamily: fonts.body,
-    fontSize: 9,
-    fontWeight: "800",
-    marginTop: 2,
-  },
-
   storyCard: {
     borderRadius: radius.xl,
     padding: spacing.md,
@@ -1374,7 +1331,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     marginBottom: spacing.md,
     ...shadows.lg,
-    minHeight: 190,
+    minHeight: 230,
     justifyContent: "center",
   },
   emoLabel: {
@@ -1384,7 +1341,7 @@ const s = StyleSheet.create({
     marginBottom: 10,
   },
   emoLabelTxt: { fontFamily: fonts.display, fontSize: 20, color: "white" },
-  palEmoji: { fontSize: 84, marginBottom: 6 },
+  palEmoji: { fontSize: 110, marginBottom: 6 },
   stageMsg: { fontFamily: fonts.body, fontSize: 14, textAlign: "center" },
 
   seqRow: {
