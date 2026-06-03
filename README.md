@@ -255,9 +255,7 @@ npm run submit:android  # Submit Android to Play Store
 - **Support:** support@kindredpal.com
 - **Company:** KindredPal Inc., Florida, USA
 - **App Store:** [Pal Feelings](https://appstoreconnect.apple.com/apps/6760982189)
-- **Support page:** [sarahschoonmaker.github.io/palfeelings-privacy-page](https://sarahschoonmaker.github.io/palfeelings-privacy-page)
 
----
 
 ```
 
